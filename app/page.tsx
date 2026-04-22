@@ -31,7 +31,7 @@ type GeoJsonGeometry =
   | { type: "MultiPolygon"; coordinates: number[][][][] };
 type GeoJsonFeature = {
   type: "Feature";
-  properties: { region: Region; label: string };
+  properties: { P?: string; region?: Region; label?: string };
   geometry: GeoJsonGeometry;
 };
 type GeoJsonFeatureCollection = {
@@ -438,11 +438,16 @@ function SiteDistributionMap({ sites }: { sites: Site[] }) {
     region,
     count: sites.filter((site) => site.region === region).length,
   }));
+  const prefectureCounts = new Map<string, number>();
+  for (const site of sites) {
+    prefectureCounts.set(site.prefecture, (prefectureCounts.get(site.prefecture) ?? 0) + 1);
+  }
+  const maxPrefectureCount = Math.max(1, ...prefectureCounts.values());
 
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/japan-regions.geojson")
+    fetch("/japan-prefectures.geojson")
       .then((response) => response.json())
       .then((data: GeoJsonFeatureCollection) => {
         if (!cancelled) setGeoJson(data);
@@ -461,7 +466,7 @@ function SiteDistributionMap({ sites }: { sites: Site[] }) {
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-lg font-bold text-slate-950">全国分布</h2>
-          <p className="mt-1 text-sm text-slate-500">GeoJSON地域ポリゴン + 拠点プロット</p>
+          <p className="mt-1 text-sm text-slate-500">GeoJSON都道府県ポリゴン + 拠点プロット</p>
         </div>
         <span className="rounded-md bg-cyan-50 px-3 py-1 text-sm font-bold text-cyan-700">
           {visibleSites.length}/{sites.length}点表示
@@ -471,18 +476,19 @@ function SiteDistributionMap({ sites }: { sites: Site[] }) {
         <div className="relative h-[420px] overflow-hidden rounded-md border border-sky-100 bg-gradient-to-b from-sky-50 to-white">
           <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" aria-hidden="true" preserveAspectRatio="none">
             {geoJson?.features.flatMap((feature) => {
-              const regionCount = regionCounts.find((item) => item.region === feature.properties.region)?.count ?? 0;
-              const opacity = Math.min(0.8, 0.16 + regionCount / Math.max(1, sites.length) * 2.8);
+              const prefecture = feature.properties.P ?? feature.properties.label ?? "";
+              const prefectureCount = prefectureCounts.get(prefecture) ?? 0;
+              const opacity = Math.min(0.86, 0.12 + (prefectureCount / maxPrefectureCount) * 0.68);
               const polygons =
                 feature.geometry.type === "Polygon" ? [feature.geometry.coordinates] : feature.geometry.coordinates;
 
               return polygons.map((polygon, index) => (
                 <polygon
-                  key={`${feature.properties.region}-${index}`}
+                  key={`${prefecture}-${index}`}
                   points={polygonToPoints(polygon)}
                   fill={`rgba(33, 190, 214, ${opacity})`}
                   stroke="#bae6fd"
-                  strokeWidth="0.45"
+                  strokeWidth="0.22"
                 />
               ));
             })}
@@ -512,7 +518,7 @@ function SiteDistributionMap({ sites }: { sites: Site[] }) {
             </div>
           ))}
           <div className="rounded-md border border-sky-100 p-3 text-xs leading-6 text-slate-500">
-            地域ポリゴンは `public/japan-regions.geojson` を読み込んで描画しています。点の色は難易度、点の大きさは優先度です。
+            都道府県ポリゴンは `public/japan-prefectures.geojson` を読み込んで描画しています。塗りは都道府県別拠点数、点の色は難易度、点の大きさは優先度です。
           </div>
         </div>
       </div>
