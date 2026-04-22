@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -21,8 +21,40 @@ import {
 } from "@/lib/scheduler";
 
 const regions: Region[] = ["北海道・東北", "関東", "中部", "関西", "中国・四国", "九州・沖縄"];
-const prefectures = ["北海道", "宮城", "東京", "神奈川", "愛知", "大阪", "広島", "福岡", "沖縄"];
 const monthOptions = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"];
+const storageKey = "nw-rollout-planner-poc:v1";
+
+type SiteSet = "sample" | "scale-100" | "scale-1000";
+
+type SavedState = {
+  siteSet: SiteSet;
+  sites: Site[];
+  setting: ProjectSetting;
+  capacities: VendorCapacity[];
+};
+
+const siteSetOptions: { value: SiteSet; label: string; description: string }[] = [
+  { value: "sample", label: "サンプル8拠点", description: "入力内容を確認するための最小データ" },
+  { value: "scale-100", label: "100拠点", description: "中規模更改を想定した拠点群" },
+  { value: "scale-1000", label: "1000拠点", description: "全国展開規模の拠点群" },
+];
+
+const prefectureMasters: {
+  prefecture: string;
+  region: Region;
+  latitude: number;
+  longitude: number;
+}[] = [
+  { prefecture: "北海道", region: "北海道・東北", latitude: 43.06, longitude: 141.35 },
+  { prefecture: "宮城", region: "北海道・東北", latitude: 38.27, longitude: 140.87 },
+  { prefecture: "東京", region: "関東", latitude: 35.68, longitude: 139.76 },
+  { prefecture: "神奈川", region: "関東", latitude: 35.44, longitude: 139.64 },
+  { prefecture: "愛知", region: "中部", latitude: 35.18, longitude: 136.9 },
+  { prefecture: "大阪", region: "関西", latitude: 34.69, longitude: 135.5 },
+  { prefecture: "広島", region: "中国・四国", latitude: 34.39, longitude: 132.46 },
+  { prefecture: "福岡", region: "九州・沖縄", latitude: 33.59, longitude: 130.4 },
+  { prefecture: "沖縄", region: "九州・沖縄", latitude: 26.21, longitude: 127.68 },
+];
 
 const initialSites: Site[] = [
   {
@@ -134,25 +166,94 @@ function createInitialCapacities(setting: ProjectSetting): VendorCapacity[] {
   );
 }
 
+function createSiteSet(siteSet: SiteSet): Site[] {
+  if (siteSet === "sample") return initialSites;
+
+  const count = siteSet === "scale-100" ? 100 : 1000;
+
+  return Array.from({ length: count }, (_, index) => {
+    const master = prefectureMasters[index % prefectureMasters.length];
+    const difficultyIndex = index % 10;
+    const priorityIndex = index % 12;
+    const blackoutMonths =
+      index % 7 === 0
+        ? [monthOptions[index % monthOptions.length]]
+        : index % 11 === 0
+          ? [monthOptions[(index + 5) % monthOptions.length]]
+          : [];
+
+    return {
+      id: `S-${String(index + 1).padStart(4, "0")}`,
+      name: `${master.prefecture}拠点${String(index + 1).padStart(4, "0")}`,
+      prefecture: master.prefecture,
+      region: master.region,
+      latitude: Number((master.latitude + ((index % 5) - 2) * 0.08).toFixed(4)),
+      longitude: Number((master.longitude + ((index % 7) - 3) * 0.08).toFixed(4)),
+      difficulty: difficultyIndex < 2 ? "高" : difficultyIndex < 6 ? "中" : "低",
+      priority: priorityIndex < 3 ? "高" : priorityIndex < 8 ? "中" : "低",
+      blackoutMonths,
+    };
+  });
+}
+
+function isSavedState(value: unknown): value is SavedState {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<SavedState>;
+  return (
+    typeof candidate.siteSet === "string" &&
+    Array.isArray(candidate.sites) &&
+    Boolean(candidate.setting) &&
+    Array.isArray(candidate.capacities)
+  );
+}
+
 export default function Home() {
   const [activeView, setActiveView] = useState<"master" | "settings" | "result">("master");
+  const [storageReady, setStorageReady] = useState(false);
+  const [siteSet, setSiteSet] = useState<SiteSet>("sample");
   const [sites, setSites] = useState<Site[]>(initialSites);
   const [setting, setSetting] = useState<ProjectSetting>(initialSetting);
   const [capacities, setCapacities] = useState<VendorCapacity[]>(() => createInitialCapacities(initialSetting));
-  const [draftSite, setDraftSite] = useState<Site>({
-    id: "S-009",
-    name: "",
-    prefecture: "東京",
-    region: "関東",
-    latitude: 35.68,
-    longitude: 139.76,
-    difficulty: "中",
-    priority: "中",
-    blackoutMonths: [],
-  });
   const [plan, setPlan] = useState<GeneratedPlan | null>(() =>
     generatePlan(initialSites, createInitialCapacities(initialSetting), initialSetting),
   );
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(storageKey);
+      if (!saved) {
+        setStorageReady(true);
+        return;
+      }
+
+      const parsed: unknown = JSON.parse(saved);
+      if (!isSavedState(parsed)) {
+        setStorageReady(true);
+        return;
+      }
+
+      setSiteSet(parsed.siteSet);
+      setSites(parsed.sites);
+      setSetting(parsed.setting);
+      setCapacities(parsed.capacities);
+      setPlan(generatePlan(parsed.sites, parsed.capacities, parsed.setting));
+    } catch {
+      window.localStorage.removeItem(storageKey);
+    } finally {
+      setStorageReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    const value: SavedState = {
+      siteSet,
+      sites,
+      setting,
+      capacities,
+    };
+    window.localStorage.setItem(storageKey, JSON.stringify(value));
+  }, [capacities, setting, siteSet, sites, storageReady]);
 
   const months = useMemo(() => getMonthRange(setting.startMonth, setting.endMonth), [setting]);
   const monthlySummary = useMemo(() => {
@@ -174,18 +275,10 @@ export default function Home() {
       };
     });
   }, [plan, sites]);
+  const visibleSites = useMemo(() => sites.slice(0, 100), [sites]);
+  const hiddenSiteCount = Math.max(0, sites.length - visibleSites.length);
 
-  function toggleMonth(target: "snowSeasonMonths" | "busySeasonMonths" | "blackoutMonths", month: string) {
-    if (target === "blackoutMonths") {
-      setDraftSite((current) => ({
-        ...current,
-        blackoutMonths: current.blackoutMonths.includes(month)
-          ? current.blackoutMonths.filter((item) => item !== month)
-          : [...current.blackoutMonths, month],
-      }));
-      return;
-    }
-
+  function toggleMonth(target: "snowSeasonMonths" | "busySeasonMonths", month: string) {
     setSetting((current) => ({
       ...current,
       [target]: current[target].includes(month)
@@ -194,16 +287,16 @@ export default function Home() {
     }));
   }
 
-  function addSite() {
-    if (!draftSite.name.trim()) return;
-    setSites((current) => [...current, { ...draftSite, name: draftSite.name.trim() }]);
-    const nextId = `S-${String(sites.length + 2).padStart(3, "0")}`;
-    setDraftSite((current) => ({ ...current, id: nextId, name: "", blackoutMonths: [] }));
-  }
-
   function runPlanner() {
     setPlan(generatePlan(sites, capacities, setting));
     setActiveView("result");
+  }
+
+  function applySiteSet(nextSiteSet: SiteSet) {
+    const nextSites = createSiteSet(nextSiteSet);
+    setSiteSet(nextSiteSet);
+    setSites(nextSites);
+    setPlan(null);
   }
 
   function updateCapacity(region: Region, maxCapacity: number) {
@@ -262,13 +355,13 @@ export default function Home() {
               </p>
             </div>
             <div>
-              <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-md bg-white p-3 shadow-sm">
-                  <p className="text-xs font-bold text-slate-500">Sites</p>
+                  <p className="text-xs font-bold text-slate-500">拠点</p>
                   <p className="mt-1 text-2xl font-black text-slate-950">{sites.length}</p>
                 </div>
                 <div className="rounded-md bg-white p-3 shadow-sm">
-                  <p className="text-xs font-bold text-slate-500">Months</p>
+                  <p className="text-xs font-bold text-slate-500">期間</p>
                   <p className="mt-1 text-2xl font-black text-slate-950">{months.length}</p>
                 </div>
                 <div className="rounded-md bg-white p-3 shadow-sm">
@@ -310,7 +403,10 @@ export default function Home() {
           <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="rounded-md border border-sky-100 bg-white p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between gap-3">
-                <h2 className="text-lg font-bold text-slate-950">拠点一覧</h2>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-950">拠点群プレビュー</h2>
+                  <p className="mt-1 text-sm text-slate-500">選択中の拠点セットから先頭100件を表示</p>
+                </div>
                 <span className="rounded-md bg-cyan-50 px-3 py-1 text-sm font-bold text-cyan-700">{sites.length}拠点</span>
               </div>
               <div className="overflow-x-auto">
@@ -327,7 +423,7 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sites.map((site) => (
+                    {visibleSites.map((site) => (
                       <tr key={site.id} className="border-b border-sky-50 hover:bg-sky-50/60">
                         <td className="py-3 pr-3 font-bold text-cyan-700">{site.id}</td>
                         <td className="py-3 pr-3 text-slate-950">{site.name}</td>
@@ -341,102 +437,43 @@ export default function Home() {
                   </tbody>
                 </table>
               </div>
+              {hiddenSiteCount > 0 && (
+                <p className="mt-3 text-sm font-semibold text-slate-500">
+                  ほか {hiddenSiteCount} 拠点は計画生成には含め、表では省略しています。
+                </p>
+              )}
             </div>
 
             <aside className="rounded-md border border-sky-100 bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-bold text-slate-950">拠点追加</h2>
+              <h2 className="text-lg font-bold text-slate-950">拠点セット</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                PoCでは個別拠点の手入力ではなく、規模別の疑似データを選択します。
+              </p>
               <div className="mt-4 grid gap-3">
-                <label className="grid gap-1 text-sm font-semibold text-slate-700">
-                  拠点名
-                  <input
-                    value={draftSite.name}
-                    onChange={(event) => setDraftSite((current) => ({ ...current, name: event.target.value }))}
-                    className="h-10 rounded-md border border-sky-100 px-3 font-normal text-slate-950 shadow-sm"
-                    placeholder="例: 千葉東"
-                  />
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="grid gap-1 text-sm font-semibold text-slate-700">
-                    都道府県
-                    <select
-                      value={draftSite.prefecture}
-                      onChange={(event) => setDraftSite((current) => ({ ...current, prefecture: event.target.value }))}
-                      className="h-10 rounded-md border border-sky-100 px-3 font-normal text-slate-950 shadow-sm"
-                    >
-                      {prefectures.map((prefecture) => (
-                        <option key={prefecture}>{prefecture}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="grid gap-1 text-sm font-semibold text-slate-700">
-                    地域
-                    <select
-                      value={draftSite.region}
-                      onChange={(event) => setDraftSite((current) => ({ ...current, region: event.target.value as Region }))}
-                      className="h-10 rounded-md border border-sky-100 px-3 font-normal text-slate-950 shadow-sm"
-                    >
-                      {regions.map((region) => (
-                        <option key={region}>{region}</option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="grid gap-1 text-sm font-semibold text-slate-700">
-                    難易度
-                    <select
-                      value={draftSite.difficulty}
-                      onChange={(event) =>
-                        setDraftSite((current) => ({ ...current, difficulty: event.target.value as Site["difficulty"] }))
-                      }
-                      className="h-10 rounded-md border border-sky-100 px-3 font-normal text-slate-950 shadow-sm"
-                    >
-                      <option>低</option>
-                      <option>中</option>
-                      <option>高</option>
-                    </select>
-                  </label>
-                  <label className="grid gap-1 text-sm font-semibold text-slate-700">
-                    優先度
-                    <select
-                      value={draftSite.priority}
-                      onChange={(event) =>
-                        setDraftSite((current) => ({ ...current, priority: event.target.value as Site["priority"] }))
-                      }
-                      className="h-10 rounded-md border border-sky-100 px-3 font-normal text-slate-950 shadow-sm"
-                    >
-                      <option>低</option>
-                      <option>中</option>
-                      <option>高</option>
-                    </select>
-                  </label>
-                </div>
-                <fieldset>
-                  <legend className="text-sm font-semibold text-slate-700">作業不可月</legend>
-                  <div className="mt-2 grid grid-cols-4 gap-2">
-                    {monthOptions.map((month) => (
-                      <button
-                        key={month}
-                        type="button"
-                        onClick={() => toggleMonth("blackoutMonths", month)}
-                        className={`h-9 rounded-md border text-sm font-semibold ${
-                          draftSite.blackoutMonths.includes(month)
-                            ? "border-orange-400 bg-orange-50 text-orange-700"
-                            : "border-sky-100 bg-white text-slate-700 hover:bg-sky-50"
-                        }`}
-                      >
-                        {month}
-                      </button>
-                    ))}
-                  </div>
-                </fieldset>
-                <button
-                  type="button"
-                  onClick={addSite}
-                  className="mt-2 h-10 rounded-md bg-cyan-500 px-4 text-sm font-bold text-white shadow-sm shadow-cyan-200 hover:bg-cyan-600"
-                >
-                  拠点を追加
-                </button>
+                {siteSetOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => applySiteSet(option.value)}
+                    className={`rounded-md border p-3 text-left transition ${
+                      siteSet === option.value
+                        ? "border-cyan-500 bg-cyan-50 shadow-sm shadow-cyan-100"
+                        : "border-sky-100 bg-white hover:bg-sky-50"
+                    }`}
+                  >
+                    <span className="block text-sm font-black text-slate-950">{option.label}</span>
+                    <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">{option.description}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="mt-5 rounded-md bg-sky-50 p-4">
+                <p className="text-xs font-bold text-slate-500">保存状態</p>
+                <p className="mt-1 text-sm font-bold text-slate-950">
+                  {storageReady ? "localStorageに自動保存中" : "保存設定を読み込み中"}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  拠点セット、条件設定、地域別施工キャパはブラウザに保存され、リロード後も復元されます。
+                </p>
               </div>
             </aside>
           </section>
