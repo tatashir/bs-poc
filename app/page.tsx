@@ -22,10 +22,22 @@ import {
 
 const regions: Region[] = ["北海道・東北", "関東", "中部", "関西", "中国・四国", "九州・沖縄"];
 const monthOptions = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"];
-const storageKey = "nw-rollout-planner-poc:v2";
+const storageKey = "nw-rollout-planner-poc:v3";
 
 type Screen = "dashboard" | "siteSets" | "settings" | "run" | "results";
-type SiteSet = "sample" | "scale-100" | "scale-1000";
+type SiteSet = "sample" | "scale-10" | "scale-100" | "scale-1000" | "scale-3000";
+type GeoJsonGeometry =
+  | { type: "Polygon"; coordinates: number[][][] }
+  | { type: "MultiPolygon"; coordinates: number[][][][] };
+type GeoJsonFeature = {
+  type: "Feature";
+  properties: { region: Region; label: string };
+  geometry: GeoJsonGeometry;
+};
+type GeoJsonFeatureCollection = {
+  type: "FeatureCollection";
+  features: GeoJsonFeature[];
+};
 
 type PlanRunMetadata = {
   id: string;
@@ -50,8 +62,10 @@ type SavedState = {
 
 const siteSetOptions: { value: SiteSet; label: string; description: string }[] = [
   { value: "sample", label: "サンプル8拠点", description: "入力内容を確認するための最小データ" },
-  { value: "scale-100", label: "100拠点", description: "中規模更改を想定した拠点群" },
-  { value: "scale-1000", label: "1000拠点", description: "全国展開規模の拠点群" },
+  { value: "scale-10", label: "10拠点", description: "全国主要都市に拠点を持つ本社・支社モデル" },
+  { value: "scale-100", label: "100拠点", description: "RIZAP級の専門店舗・サービス拠点モデル" },
+  { value: "scale-1000", label: "1000拠点", description: "コメダ・吉野家級の全国チェーンモデル" },
+  { value: "scale-3000", label: "3000拠点", description: "すかいらーく級の大規模外食チェーンモデル" },
 ];
 
 const prefectureMasters: {
@@ -59,16 +73,55 @@ const prefectureMasters: {
   region: Region;
   latitude: number;
   longitude: number;
+  weight: number;
 }[] = [
-  { prefecture: "北海道", region: "北海道・東北", latitude: 43.06, longitude: 141.35 },
-  { prefecture: "宮城", region: "北海道・東北", latitude: 38.27, longitude: 140.87 },
-  { prefecture: "東京", region: "関東", latitude: 35.68, longitude: 139.76 },
-  { prefecture: "神奈川", region: "関東", latitude: 35.44, longitude: 139.64 },
-  { prefecture: "愛知", region: "中部", latitude: 35.18, longitude: 136.9 },
-  { prefecture: "大阪", region: "関西", latitude: 34.69, longitude: 135.5 },
-  { prefecture: "広島", region: "中国・四国", latitude: 34.39, longitude: 132.46 },
-  { prefecture: "福岡", region: "九州・沖縄", latitude: 33.59, longitude: 130.4 },
-  { prefecture: "沖縄", region: "九州・沖縄", latitude: 26.21, longitude: 127.68 },
+  { prefecture: "北海道", region: "北海道・東北", latitude: 43.06, longitude: 141.35, weight: 5 },
+  { prefecture: "青森", region: "北海道・東北", latitude: 40.82, longitude: 140.74, weight: 1 },
+  { prefecture: "岩手", region: "北海道・東北", latitude: 39.7, longitude: 141.15, weight: 1 },
+  { prefecture: "宮城", region: "北海道・東北", latitude: 38.27, longitude: 140.87, weight: 3 },
+  { prefecture: "秋田", region: "北海道・東北", latitude: 39.72, longitude: 140.1, weight: 1 },
+  { prefecture: "山形", region: "北海道・東北", latitude: 38.24, longitude: 140.36, weight: 1 },
+  { prefecture: "福島", region: "北海道・東北", latitude: 37.76, longitude: 140.47, weight: 2 },
+  { prefecture: "茨城", region: "関東", latitude: 36.37, longitude: 140.47, weight: 3 },
+  { prefecture: "栃木", region: "関東", latitude: 36.56, longitude: 139.88, weight: 2 },
+  { prefecture: "群馬", region: "関東", latitude: 36.39, longitude: 139.06, weight: 2 },
+  { prefecture: "埼玉", region: "関東", latitude: 35.86, longitude: 139.65, weight: 7 },
+  { prefecture: "千葉", region: "関東", latitude: 35.61, longitude: 140.12, weight: 6 },
+  { prefecture: "東京", region: "関東", latitude: 35.68, longitude: 139.76, weight: 13 },
+  { prefecture: "神奈川", region: "関東", latitude: 35.44, longitude: 139.64, weight: 9 },
+  { prefecture: "新潟", region: "中部", latitude: 37.9, longitude: 139.02, weight: 2 },
+  { prefecture: "富山", region: "中部", latitude: 36.7, longitude: 137.21, weight: 1 },
+  { prefecture: "石川", region: "中部", latitude: 36.56, longitude: 136.66, weight: 1 },
+  { prefecture: "福井", region: "中部", latitude: 36.06, longitude: 136.22, weight: 1 },
+  { prefecture: "山梨", region: "中部", latitude: 35.66, longitude: 138.57, weight: 1 },
+  { prefecture: "長野", region: "中部", latitude: 36.65, longitude: 138.18, weight: 2 },
+  { prefecture: "岐阜", region: "中部", latitude: 35.42, longitude: 136.76, weight: 2 },
+  { prefecture: "静岡", region: "中部", latitude: 34.98, longitude: 138.38, weight: 4 },
+  { prefecture: "愛知", region: "中部", latitude: 35.18, longitude: 136.9, weight: 8 },
+  { prefecture: "三重", region: "中部", latitude: 34.73, longitude: 136.51, weight: 2 },
+  { prefecture: "滋賀", region: "関西", latitude: 35.0, longitude: 135.87, weight: 1 },
+  { prefecture: "京都", region: "関西", latitude: 35.01, longitude: 135.76, weight: 3 },
+  { prefecture: "大阪", region: "関西", latitude: 34.69, longitude: 135.5, weight: 9 },
+  { prefecture: "兵庫", region: "関西", latitude: 34.69, longitude: 135.18, weight: 5 },
+  { prefecture: "奈良", region: "関西", latitude: 34.69, longitude: 135.83, weight: 1 },
+  { prefecture: "和歌山", region: "関西", latitude: 34.23, longitude: 135.17, weight: 1 },
+  { prefecture: "鳥取", region: "中国・四国", latitude: 35.5, longitude: 134.24, weight: 1 },
+  { prefecture: "島根", region: "中国・四国", latitude: 35.47, longitude: 133.05, weight: 1 },
+  { prefecture: "岡山", region: "中国・四国", latitude: 34.66, longitude: 133.92, weight: 2 },
+  { prefecture: "広島", region: "中国・四国", latitude: 34.39, longitude: 132.46, weight: 3 },
+  { prefecture: "山口", region: "中国・四国", latitude: 34.18, longitude: 131.47, weight: 1 },
+  { prefecture: "徳島", region: "中国・四国", latitude: 34.07, longitude: 134.55, weight: 1 },
+  { prefecture: "香川", region: "中国・四国", latitude: 34.34, longitude: 134.04, weight: 1 },
+  { prefecture: "愛媛", region: "中国・四国", latitude: 33.84, longitude: 132.77, weight: 1 },
+  { prefecture: "高知", region: "中国・四国", latitude: 33.56, longitude: 133.53, weight: 1 },
+  { prefecture: "福岡", region: "九州・沖縄", latitude: 33.59, longitude: 130.4, weight: 5 },
+  { prefecture: "佐賀", region: "九州・沖縄", latitude: 33.25, longitude: 130.3, weight: 1 },
+  { prefecture: "長崎", region: "九州・沖縄", latitude: 32.75, longitude: 129.87, weight: 1 },
+  { prefecture: "熊本", region: "九州・沖縄", latitude: 32.8, longitude: 130.71, weight: 2 },
+  { prefecture: "大分", region: "九州・沖縄", latitude: 33.24, longitude: 131.61, weight: 1 },
+  { prefecture: "宮崎", region: "九州・沖縄", latitude: 31.91, longitude: 131.42, weight: 1 },
+  { prefecture: "鹿児島", region: "九州・沖縄", latitude: 31.6, longitude: 130.56, weight: 2 },
+  { prefecture: "沖縄", region: "九州・沖縄", latitude: 26.21, longitude: 127.68, weight: 2 },
 ];
 
 const initialSites: Site[] = [
@@ -183,10 +236,15 @@ function createInitialCapacities(setting: ProjectSetting): VendorCapacity[] {
 
 function createSiteSet(siteSet: SiteSet): Site[] {
   if (siteSet === "sample") return initialSites;
-  const count = siteSet === "scale-100" ? 100 : 1000;
+  const count = siteSet === "scale-10" ? 10 : siteSet === "scale-100" ? 100 : siteSet === "scale-1000" ? 1000 : 3000;
+  const weightedPrefectures = prefectureMasters.flatMap((master) => Array.from({ length: master.weight }, () => master));
+  const compactPrefectures = ["北海道", "宮城", "東京", "神奈川", "愛知", "大阪", "広島", "福岡", "沖縄", "新潟"];
 
   return Array.from({ length: count }, (_, index) => {
-    const master = prefectureMasters[index % prefectureMasters.length];
+    const master =
+      siteSet === "scale-10"
+        ? (prefectureMasters.find((item) => item.prefecture === compactPrefectures[index]) ?? prefectureMasters[0])
+        : weightedPrefectures[(index * 17 + Math.floor(index / 5)) % weightedPrefectures.length];
     const difficultyIndex = index % 10;
     const priorityIndex = index % 12;
     const blackoutMonths =
@@ -201,8 +259,8 @@ function createSiteSet(siteSet: SiteSet): Site[] {
       name: `${master.prefecture}拠点${String(index + 1).padStart(4, "0")}`,
       prefecture: master.prefecture,
       region: master.region,
-      latitude: Number((master.latitude + ((index % 5) - 2) * 0.08).toFixed(4)),
-      longitude: Number((master.longitude + ((index % 7) - 3) * 0.08).toFixed(4)),
+      latitude: Number((master.latitude + ((index % 9) - 4) * 0.035).toFixed(4)),
+      longitude: Number((master.longitude + ((index % 11) - 5) * 0.035).toFixed(4)),
       difficulty: difficultyIndex < 2 ? "高" : difficultyIndex < 6 ? "中" : "低",
       priority: priorityIndex < 3 ? "高" : priorityIndex < 8 ? "中" : "低",
       blackoutMonths,
@@ -257,16 +315,33 @@ function createPlanRunMetadata(
 }
 
 function normalizePoint(site: Site) {
-  const minLat = 24;
-  const maxLat = 46;
-  const minLng = 122;
-  const maxLng = 146;
-  const x = ((site.longitude - minLng) / (maxLng - minLng)) * 100;
-  const y = 100 - ((site.latitude - minLat) / (maxLat - minLat)) * 100;
+  const x = projectLongitude(site.longitude);
+  const y = projectLatitude(site.latitude);
   return {
     x: Math.min(96, Math.max(4, x)),
     y: Math.min(96, Math.max(4, y)),
   };
+}
+
+function projectLongitude(longitude: number) {
+  const minLng = 122;
+  const maxLng = 146;
+  return ((longitude - minLng) / (maxLng - minLng)) * 100;
+}
+
+function projectLatitude(latitude: number) {
+  const minLat = 24;
+  const maxLat = 46;
+  return 100 - ((latitude - minLat) / (maxLat - minLat)) * 100;
+}
+
+function coordinateToPoint(coordinate: number[]) {
+  const [longitude, latitude] = coordinate;
+  return `${projectLongitude(longitude).toFixed(2)},${projectLatitude(latitude).toFixed(2)}`;
+}
+
+function polygonToPoints(polygon: number[][][]) {
+  return polygon[0].map(coordinateToPoint).join(" ");
 }
 
 function Shell({
@@ -357,18 +432,36 @@ function Shell({
 }
 
 function SiteDistributionMap({ sites }: { sites: Site[] }) {
+  const [geoJson, setGeoJson] = useState<GeoJsonFeatureCollection | null>(null);
   const visibleSites = sites.length > 350 ? sites.filter((_, index) => index % Math.ceil(sites.length / 350) === 0) : sites;
   const regionCounts = regions.map((region) => ({
     region,
     count: sites.filter((site) => site.region === region).length,
   }));
 
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch("/japan-regions.geojson")
+      .then((response) => response.json())
+      .then((data: GeoJsonFeatureCollection) => {
+        if (!cancelled) setGeoJson(data);
+      })
+      .catch(() => {
+        if (!cancelled) setGeoJson(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="rounded-md border border-sky-100 bg-white p-5 shadow-sm">
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-lg font-bold text-slate-950">全国分布</h2>
-          <p className="mt-1 text-sm text-slate-500">緯度経度を正規化した簡易プロット</p>
+          <p className="mt-1 text-sm text-slate-500">GeoJSON地域ポリゴン + 拠点プロット</p>
         </div>
         <span className="rounded-md bg-cyan-50 px-3 py-1 text-sm font-bold text-cyan-700">
           {visibleSites.length}/{sites.length}点表示
@@ -376,10 +469,24 @@ function SiteDistributionMap({ sites }: { sites: Site[] }) {
       </div>
       <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
         <div className="relative h-[420px] overflow-hidden rounded-md border border-sky-100 bg-gradient-to-b from-sky-50 to-white">
-          <div className="absolute left-[58%] top-[7%] h-[78%] w-[25%] rotate-[24deg] rounded-[45%] border border-sky-200 bg-white/70" />
-          <div className="absolute left-[43%] top-[48%] h-[22%] w-[19%] rotate-[-22deg] rounded-[45%] border border-sky-200 bg-white/70" />
-          <div className="absolute left-[24%] top-[67%] h-[18%] w-[28%] rotate-[-24deg] rounded-[45%] border border-sky-200 bg-white/70" />
-          <div className="absolute left-[18%] top-[82%] h-[10%] w-[12%] rotate-[-18deg] rounded-[45%] border border-sky-200 bg-white/70" />
+          <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" aria-hidden="true" preserveAspectRatio="none">
+            {geoJson?.features.flatMap((feature) => {
+              const regionCount = regionCounts.find((item) => item.region === feature.properties.region)?.count ?? 0;
+              const opacity = Math.min(0.8, 0.16 + regionCount / Math.max(1, sites.length) * 2.8);
+              const polygons =
+                feature.geometry.type === "Polygon" ? [feature.geometry.coordinates] : feature.geometry.coordinates;
+
+              return polygons.map((polygon, index) => (
+                <polygon
+                  key={`${feature.properties.region}-${index}`}
+                  points={polygonToPoints(polygon)}
+                  fill={`rgba(33, 190, 214, ${opacity})`}
+                  stroke="#bae6fd"
+                  strokeWidth="0.45"
+                />
+              ));
+            })}
+          </svg>
           {visibleSites.map((site) => {
             const point = normalizePoint(site);
             const color =
@@ -405,7 +512,7 @@ function SiteDistributionMap({ sites }: { sites: Site[] }) {
             </div>
           ))}
           <div className="rounded-md border border-sky-100 p-3 text-xs leading-6 text-slate-500">
-            点の色は難易度、点の大きさは優先度を表します。GeoJSON導入前の分布確認用ビューです。
+            地域ポリゴンは `public/japan-regions.geojson` を読み込んで描画しています。点の色は難易度、点の大きさは優先度です。
           </div>
         </div>
       </div>
