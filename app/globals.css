@@ -6,8 +6,9 @@
 
 body {
   margin: 0;
-  background: #f5f7fb;
-  color: #172033;
+  background:
+    linear-gradient(180deg, #eefaff 0, #f7fbfd 360px, #f5f7fb 100%);
+  color: #17324d;
   font-family:
     Arial,
     "Hiragino Kaku Gothic ProN",
@@ -20,4 +21,16 @@ button,
 input,
 select {
   font: inherit;
+}
+
+input,
+select {
+  background: #ffffff;
+}
+
+input:focus,
+select:focus,
+button:focus-visible {
+  outline: 3px solid rgba(33, 190, 214, 0.24);
+  outline-offset: 2px;
 }

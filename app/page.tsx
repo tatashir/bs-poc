@@ -222,22 +222,67 @@ export default function Home() {
 
   return (
     <main className="min-h-screen">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:px-8">
+      <header className="border-b border-sky-100 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-            <div>
-              <p className="text-sm font-semibold text-emerald-700">NW更改 展開計画PoC</p>
-              <h1 className="mt-1 text-2xl font-bold text-slate-950 sm:text-3xl">負荷分散された拠点展開計画を生成</h1>
+            <div className="flex items-center gap-3">
+              <div className="grid h-11 w-11 place-items-center rounded-md bg-cyan-500 text-base font-black text-white shadow-sm shadow-cyan-200">
+                RP
+              </div>
+              <div>
+                <p className="text-sm font-bold text-cyan-700">NW更改 展開計画PoC</p>
+                <p className="text-xs font-semibold text-slate-500">Rollout Process Management</p>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={runPlanner}
-              className="h-11 rounded-md bg-slate-950 px-5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
-            >
-              計画生成
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-md border border-sky-100 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-800">
+                3画面PoC
+              </span>
+              <span className="rounded-md border border-orange-100 bg-orange-50 px-3 py-2 text-xs font-bold text-orange-700">
+                DB未接続
+              </span>
+              <button
+                type="button"
+                onClick={runPlanner}
+                className="h-11 rounded-md bg-cyan-500 px-5 text-sm font-bold text-white shadow-sm shadow-cyan-200 hover:bg-cyan-600"
+              >
+                計画生成
+              </button>
+            </div>
           </div>
-          <nav className="grid gap-2 sm:grid-cols-3" aria-label="画面切替">
+
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
+            <div className="py-3">
+              <p className="text-sm font-bold text-cyan-700">拠点・キャパ・季節制約をひとつに集約</p>
+              <h1 className="mt-2 max-w-3xl text-3xl font-black leading-tight text-slate-950 sm:text-5xl">
+                全国展開の計画作成を、入力から説明可能な割当まで一気通貫に。
+              </h1>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
+                拠点情報と施工キャパをもとに、月次負荷をならした展開案を生成します。PoCではCSVを使わず、画面入力だけで計画結果を確認できます。
+              </p>
+            </div>
+            <div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-md bg-white p-3 shadow-sm">
+                  <p className="text-xs font-bold text-slate-500">Sites</p>
+                  <p className="mt-1 text-2xl font-black text-slate-950">{sites.length}</p>
+                </div>
+                <div className="rounded-md bg-white p-3 shadow-sm">
+                  <p className="text-xs font-bold text-slate-500">Months</p>
+                  <p className="mt-1 text-2xl font-black text-slate-950">{months.length}</p>
+                </div>
+                <div className="rounded-md bg-white p-3 shadow-sm">
+                  <p className="text-xs font-bold text-slate-500">Score</p>
+                  <p className="mt-1 text-2xl font-black text-cyan-700">{plan?.plan.score ?? "-"}</p>
+                </div>
+              </div>
+              <div className="mt-4 h-2 rounded-full bg-white">
+                <div className="h-2 rounded-full bg-cyan-500" style={{ width: `${plan?.plan.score ?? 0}%` }} />
+              </div>
+            </div>
+          </div>
+
+          <nav className="grid gap-2 rounded-md border border-sky-100 bg-sky-50 p-1 sm:grid-cols-3" aria-label="画面切替">
             {[
               ["master", "マスタ入力"],
               ["settings", "条件設定"],
@@ -247,10 +292,10 @@ export default function Home() {
                 key={key}
                 type="button"
                 onClick={() => setActiveView(key as "master" | "settings" | "result")}
-                className={`h-10 rounded-md border px-3 text-sm font-semibold ${
+                className={`h-10 rounded-md px-3 text-sm font-bold transition ${
                   activeView === key
-                    ? "border-emerald-700 bg-emerald-700 text-white"
-                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                    ? "bg-white text-cyan-700 shadow-sm"
+                    : "text-slate-600 hover:bg-white/70 hover:text-slate-950"
                 }`}
               >
                 {label}
@@ -260,18 +305,18 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
         {activeView === "master" && (
           <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="rounded-md border border-sky-100 bg-white p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h2 className="text-lg font-bold text-slate-950">拠点一覧</h2>
-                <span className="rounded-md bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">{sites.length}拠点</span>
+                <span className="rounded-md bg-cyan-50 px-3 py-1 text-sm font-bold text-cyan-700">{sites.length}拠点</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] border-collapse text-left text-sm">
                   <thead>
-                    <tr className="border-b border-slate-200 text-slate-600">
+                    <tr className="border-b border-sky-100 text-slate-500">
                       <th className="py-2 pr-3">ID</th>
                       <th className="py-2 pr-3">拠点名</th>
                       <th className="py-2 pr-3">都道府県</th>
@@ -283,8 +328,8 @@ export default function Home() {
                   </thead>
                   <tbody>
                     {sites.map((site) => (
-                      <tr key={site.id} className="border-b border-slate-100">
-                        <td className="py-3 pr-3 font-semibold text-slate-700">{site.id}</td>
+                      <tr key={site.id} className="border-b border-sky-50 hover:bg-sky-50/60">
+                        <td className="py-3 pr-3 font-bold text-cyan-700">{site.id}</td>
                         <td className="py-3 pr-3 text-slate-950">{site.name}</td>
                         <td className="py-3 pr-3">{site.prefecture}</td>
                         <td className="py-3 pr-3">{site.region}</td>
@@ -298,7 +343,7 @@ export default function Home() {
               </div>
             </div>
 
-            <aside className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+            <aside className="rounded-md border border-sky-100 bg-white p-5 shadow-sm">
               <h2 className="text-lg font-bold text-slate-950">拠点追加</h2>
               <div className="mt-4 grid gap-3">
                 <label className="grid gap-1 text-sm font-semibold text-slate-700">
@@ -306,7 +351,7 @@ export default function Home() {
                   <input
                     value={draftSite.name}
                     onChange={(event) => setDraftSite((current) => ({ ...current, name: event.target.value }))}
-                    className="h-10 rounded-md border border-slate-300 px-3 font-normal"
+                    className="h-10 rounded-md border border-sky-100 px-3 font-normal text-slate-950 shadow-sm"
                     placeholder="例: 千葉東"
                   />
                 </label>
@@ -316,7 +361,7 @@ export default function Home() {
                     <select
                       value={draftSite.prefecture}
                       onChange={(event) => setDraftSite((current) => ({ ...current, prefecture: event.target.value }))}
-                      className="h-10 rounded-md border border-slate-300 px-3 font-normal"
+                      className="h-10 rounded-md border border-sky-100 px-3 font-normal text-slate-950 shadow-sm"
                     >
                       {prefectures.map((prefecture) => (
                         <option key={prefecture}>{prefecture}</option>
@@ -328,7 +373,7 @@ export default function Home() {
                     <select
                       value={draftSite.region}
                       onChange={(event) => setDraftSite((current) => ({ ...current, region: event.target.value as Region }))}
-                      className="h-10 rounded-md border border-slate-300 px-3 font-normal"
+                      className="h-10 rounded-md border border-sky-100 px-3 font-normal text-slate-950 shadow-sm"
                     >
                       {regions.map((region) => (
                         <option key={region}>{region}</option>
@@ -344,7 +389,7 @@ export default function Home() {
                       onChange={(event) =>
                         setDraftSite((current) => ({ ...current, difficulty: event.target.value as Site["difficulty"] }))
                       }
-                      className="h-10 rounded-md border border-slate-300 px-3 font-normal"
+                      className="h-10 rounded-md border border-sky-100 px-3 font-normal text-slate-950 shadow-sm"
                     >
                       <option>低</option>
                       <option>中</option>
@@ -358,7 +403,7 @@ export default function Home() {
                       onChange={(event) =>
                         setDraftSite((current) => ({ ...current, priority: event.target.value as Site["priority"] }))
                       }
-                      className="h-10 rounded-md border border-slate-300 px-3 font-normal"
+                      className="h-10 rounded-md border border-sky-100 px-3 font-normal text-slate-950 shadow-sm"
                     >
                       <option>低</option>
                       <option>中</option>
@@ -376,8 +421,8 @@ export default function Home() {
                         onClick={() => toggleMonth("blackoutMonths", month)}
                         className={`h-9 rounded-md border text-sm font-semibold ${
                           draftSite.blackoutMonths.includes(month)
-                            ? "border-rose-600 bg-rose-50 text-rose-700"
-                            : "border-slate-300 bg-white text-slate-700"
+                            ? "border-orange-400 bg-orange-50 text-orange-700"
+                            : "border-sky-100 bg-white text-slate-700 hover:bg-sky-50"
                         }`}
                       >
                         {month}
@@ -388,7 +433,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={addSite}
-                  className="mt-2 h-10 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800"
+                  className="mt-2 h-10 rounded-md bg-cyan-500 px-4 text-sm font-bold text-white shadow-sm shadow-cyan-200 hover:bg-cyan-600"
                 >
                   拠点を追加
                 </button>
@@ -399,7 +444,7 @@ export default function Home() {
 
         {activeView === "settings" && (
           <section className="grid gap-5 lg:grid-cols-2">
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="rounded-md border border-sky-100 bg-white p-5 shadow-sm">
               <h2 className="text-lg font-bold text-slate-950">期間と月次件数</h2>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <label className="grid gap-1 text-sm font-semibold text-slate-700">
@@ -408,7 +453,7 @@ export default function Home() {
                     type="month"
                     value={setting.startMonth}
                     onChange={(event) => setSetting((current) => ({ ...current, startMonth: event.target.value }))}
-                    className="h-10 rounded-md border border-slate-300 px-3 font-normal"
+                    className="h-10 rounded-md border border-sky-100 px-3 font-normal text-slate-950 shadow-sm"
                   />
                 </label>
                 <label className="grid gap-1 text-sm font-semibold text-slate-700">
@@ -417,7 +462,7 @@ export default function Home() {
                     type="month"
                     value={setting.endMonth}
                     onChange={(event) => setSetting((current) => ({ ...current, endMonth: event.target.value }))}
-                    className="h-10 rounded-md border border-slate-300 px-3 font-normal"
+                    className="h-10 rounded-md border border-sky-100 px-3 font-normal text-slate-950 shadow-sm"
                   />
                 </label>
                 <label className="grid gap-1 text-sm font-semibold text-slate-700">
@@ -429,7 +474,7 @@ export default function Home() {
                     onChange={(event) =>
                       setSetting((current) => ({ ...current, monthlyMinimum: Number(event.target.value) }))
                     }
-                    className="h-10 rounded-md border border-slate-300 px-3 font-normal"
+                    className="h-10 rounded-md border border-sky-100 px-3 font-normal text-slate-950 shadow-sm"
                   />
                 </label>
                 <label className="grid gap-1 text-sm font-semibold text-slate-700">
@@ -441,13 +486,13 @@ export default function Home() {
                     onChange={(event) =>
                       setSetting((current) => ({ ...current, monthlyMaximum: Number(event.target.value) }))
                     }
-                    className="h-10 rounded-md border border-slate-300 px-3 font-normal"
+                    className="h-10 rounded-md border border-sky-100 px-3 font-normal text-slate-950 shadow-sm"
                   />
                 </label>
               </div>
             </div>
 
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="rounded-md border border-sky-100 bg-white p-5 shadow-sm">
               <h2 className="text-lg font-bold text-slate-950">季節制約</h2>
               <div className="mt-4 grid gap-4">
                 <fieldset>
@@ -460,8 +505,8 @@ export default function Home() {
                         onClick={() => toggleMonth("snowSeasonMonths", month)}
                         className={`h-9 rounded-md border text-sm font-semibold ${
                           setting.snowSeasonMonths.includes(month)
-                            ? "border-sky-700 bg-sky-50 text-sky-800"
-                            : "border-slate-300 bg-white text-slate-700"
+                            ? "border-cyan-500 bg-cyan-50 text-cyan-700"
+                            : "border-sky-100 bg-white text-slate-700 hover:bg-sky-50"
                         }`}
                       >
                         {month}
@@ -480,7 +525,7 @@ export default function Home() {
                         className={`h-9 rounded-md border text-sm font-semibold ${
                           setting.busySeasonMonths.includes(month)
                             ? "border-amber-700 bg-amber-50 text-amber-800"
-                            : "border-slate-300 bg-white text-slate-700"
+                            : "border-sky-100 bg-white text-slate-700 hover:bg-sky-50"
                         }`}
                       >
                         {month}
@@ -491,7 +536,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
+            <div className="rounded-md border border-sky-100 bg-white p-5 shadow-sm lg:col-span-2">
               <h2 className="text-lg font-bold text-slate-950">地域別施工キャパ</h2>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {regions.map((region) => {
@@ -505,7 +550,7 @@ export default function Home() {
                         min={1}
                         value={value}
                         onChange={(event) => updateCapacity(region, Number(event.target.value))}
-                        className="h-10 rounded-md border border-slate-300 px-3 font-normal"
+                        className="h-10 rounded-md border border-sky-100 px-3 font-normal text-slate-950 shadow-sm"
                       />
                     </label>
                   );
@@ -518,7 +563,7 @@ export default function Home() {
         {activeView === "result" && (
           <section className="grid gap-5">
             <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
-              <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="rounded-md border border-sky-100 bg-white p-5 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-950">Plan</h2>
                 <dl className="mt-4 grid gap-3 text-sm">
                   <div>
@@ -527,7 +572,7 @@ export default function Home() {
                   </div>
                   <div>
                     <dt className="text-slate-500">Score</dt>
-                    <dd className="text-3xl font-bold text-emerald-700">{plan?.plan.score ?? "-"}</dd>
+                    <dd className="text-3xl font-black text-cyan-700">{plan?.plan.score ?? "-"}</dd>
                   </div>
                   <div>
                     <dt className="text-slate-500">Created</dt>
@@ -538,7 +583,7 @@ export default function Home() {
                 </dl>
               </div>
 
-              <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="rounded-md border border-sky-100 bg-white p-5 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-950">月次件数表</h2>
                 <div className="mt-4 h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -547,7 +592,7 @@ export default function Home() {
                       <XAxis dataKey="month" />
                       <YAxis allowDecimals={false} />
                       <Tooltip />
-                      <Bar dataKey="count" name="拠点数" fill="#047857" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="count" name="拠点数" fill="#21bed6" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -555,17 +600,17 @@ export default function Home() {
             </div>
 
             <div className="grid gap-5 lg:grid-cols-2">
-              <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="rounded-md border border-sky-100 bg-white p-5 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-950">地図ヒートマップ</h2>
                 <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {regionSummary.map((item) => (
-                    <div key={item.region} className="rounded-md border border-slate-200 p-3">
+                    <div key={item.region} className="rounded-md border border-sky-100 bg-white p-3 shadow-sm">
                       <div
                         className="mb-3 h-16 rounded-md"
                         style={{
-                          background: `linear-gradient(135deg, rgba(4,120,87,${
+                          background: `linear-gradient(135deg, rgba(33,190,214,${
                             Math.max(item.rate, 12) / 100
-                          }), rgba(245,158,11,${Math.max(100 - item.rate, 20) / 140}))`,
+                          }), rgba(247,179,43,${Math.max(100 - item.rate, 20) / 150}))`,
                         }}
                       />
                       <p className="text-sm font-bold text-slate-950">{item.region}</p>
@@ -577,7 +622,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="rounded-md border border-sky-100 bg-white p-5 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-950">エリア別進捗率</h2>
                 <div className="mt-4 grid gap-3">
                   {regionSummary.map((item) => (
@@ -586,8 +631,8 @@ export default function Home() {
                         <span className="font-semibold text-slate-800">{item.region}</span>
                         <span className="text-slate-600">{item.rate}%</span>
                       </div>
-                      <div className="h-3 rounded-full bg-slate-100">
-                        <div className="h-3 rounded-full bg-emerald-700" style={{ width: `${item.rate}%` }} />
+                      <div className="h-3 rounded-full bg-sky-50">
+                        <div className="h-3 rounded-full bg-cyan-500" style={{ width: `${item.rate}%` }} />
                       </div>
                     </div>
                   ))}
@@ -595,12 +640,12 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="rounded-md border border-sky-100 bg-white p-5 shadow-sm">
               <h2 className="text-lg font-bold text-slate-950">割当結果</h2>
               <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[900px] border-collapse text-left text-sm">
                   <thead>
-                    <tr className="border-b border-slate-200 text-slate-600">
+                    <tr className="border-b border-sky-100 text-slate-500">
                       <th className="py-2 pr-3">拠点</th>
                       <th className="py-2 pr-3">月</th>
                       <th className="py-2 pr-3">地域</th>
@@ -612,7 +657,7 @@ export default function Home() {
                     {plan?.assignments.map((assignment) => {
                       const site = sites.find((item) => item.id === assignment.siteId);
                       return (
-                        <tr key={assignment.siteId} className="border-b border-slate-100 align-top">
+                        <tr key={assignment.siteId} className="border-b border-sky-50 align-top hover:bg-sky-50/60">
                           <td className="py-3 pr-3 font-semibold text-slate-950">{site?.name ?? assignment.siteId}</td>
                           <td className="py-3 pr-3">{assignment.yearMonth}</td>
                           <td className="py-3 pr-3">{assignment.region}</td>
@@ -622,7 +667,7 @@ export default function Home() {
                                 {assignment.warnings.join(", ")}
                               </span>
                             ) : (
-                              <span className="rounded-md bg-emerald-50 px-2 py-1 font-semibold text-emerald-800">なし</span>
+                              <span className="rounded-md bg-cyan-50 px-2 py-1 font-semibold text-cyan-700">なし</span>
                             )}
                           </td>
                           <td className="py-3 pr-3 text-slate-700">{assignment.reason}</td>
