@@ -11,7 +11,10 @@ type GeoJsonFeatureCollection = {
   features: Array<{
     type: "Feature";
     properties: { P?: string; label?: string };
-    geometry: { type: "Polygon" | "MultiPolygon"; coordinates: number[][][] | number[][][][] };
+    geometry: {
+      type: "Polygon" | "MultiPolygon";
+      coordinates: number[][][] | number[][][][];
+    };
   }>;
 };
 
@@ -56,11 +59,16 @@ export function InteractiveJapanMap({
   const siteLayerRef = useRef<LeafletNS.LayerGroup | null>(null);
   const carrierLayerRef = useRef<LeafletNS.LayerGroup | null>(null);
   const [mode, setMode] = useState<"sites" | "heatmap" | "links">("sites");
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
   const [error, setError] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(4.4);
   const [prefectureCount, setPrefectureCount] = useState(0);
-  const siteCountByPrefecture = useMemo(() => getSiteCountByPrefecture(sites), [sites]);
+  const siteCountByPrefecture = useMemo(
+    () => getSiteCountByPrefecture(sites),
+    [sites],
+  );
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -105,7 +113,8 @@ export function InteractiveJapanMap({
         map.on("remove", () => observer.disconnect());
 
         const response = await fetch("/japan-prefectures.geojson");
-        if (!response.ok) throw new Error("Failed to fetch japan-prefectures.geojson");
+        if (!response.ok)
+          throw new Error("Failed to fetch japan-prefectures.geojson");
         const geojson = (await response.json()) as GeoJsonFeatureCollection;
         if (cancelled) return;
         setPrefectureCount(geojson.features.length);
@@ -127,7 +136,9 @@ export function InteractiveJapanMap({
       } catch (mapError) {
         if (!cancelled) {
           setStatus("error");
-          setError(mapError instanceof Error ? mapError.message : "Map setup failed");
+          setError(
+            mapError instanceof Error ? mapError.message : "Map setup failed",
+          );
         }
       }
     })();
@@ -162,7 +173,15 @@ export function InteractiveJapanMap({
       const isHeatmap = mode === "heatmap";
       const isHighlighted = highlightedSiteId === site.id;
       const circle = L.circleMarker([site.latitude, site.longitude], {
-        radius: isHighlighted ? 8 : isHeatmap ? 8 : site.priority === "高" ? 6 : site.priority === "中" ? 5 : 4,
+        radius: isHighlighted
+          ? 8
+          : isHeatmap
+            ? 8
+            : site.priority === "高"
+              ? 6
+              : site.priority === "中"
+                ? 5
+                : 4,
         color: isHighlighted ? "#111827" : "#ffffff",
         weight: isHighlighted ? 2 : 1.2,
         fillColor: isHeatmap ? "#0ea5e9" : getDifficultyColor(site.difficulty),
@@ -192,18 +211,24 @@ export function InteractiveJapanMap({
         weight: isHighlighted ? 2 : 1.4,
         fillColor: isHighlighted ? "#1d4ed8" : "#111827",
         fillOpacity: 1,
-      }).bindPopup(`<strong>${office.name}</strong><br/>Capacity: ${office.monthlyCapacity}/month`);
+      }).bindPopup(
+        `<strong>${office.name}</strong><br/>Capacity: ${office.monthlyCapacity}/month`,
+      );
       carrierLayer.addLayer(marker);
     }
 
     const siteById = new Map(sites.map((site) => [site.id, site]));
-    const officeById = new Map(carrierOffices.map((office) => [office.id, office]));
+    const officeById = new Map(
+      carrierOffices.map((office) => [office.id, office]),
+    );
 
     for (const assignment of carrierAssignments) {
       const site = siteById.get(assignment.siteId);
       const office = officeById.get(assignment.carrierOfficeId);
       if (!site || !office) continue;
-      const isHighlighted = highlightedSiteId === site.id && highlightedCarrierOfficeId === office.id;
+      const isHighlighted =
+        highlightedSiteId === site.id &&
+        highlightedCarrierOfficeId === office.id;
 
       const link = L.polyline(
         [
@@ -231,13 +256,16 @@ export function InteractiveJapanMap({
       prefectureLayer.bringToBack();
     }
     linksLayer.eachLayer((layer) => {
-      if ("bringToFront" in layer && typeof layer.bringToFront === "function") layer.bringToFront();
+      if ("bringToFront" in layer && typeof layer.bringToFront === "function")
+        layer.bringToFront();
     });
     siteLayer.eachLayer((layer) => {
-      if ("bringToFront" in layer && typeof layer.bringToFront === "function") layer.bringToFront();
+      if ("bringToFront" in layer && typeof layer.bringToFront === "function")
+        layer.bringToFront();
     });
     carrierLayer.eachLayer((layer) => {
-      if ("bringToFront" in layer && typeof layer.bringToFront === "function") layer.bringToFront();
+      if ("bringToFront" in layer && typeof layer.bringToFront === "function")
+        layer.bringToFront();
     });
 
     map.invalidateSize();
@@ -275,7 +303,9 @@ export function InteractiveJapanMap({
             type="button"
             onClick={() => setMode(key as "sites" | "heatmap" | "links")}
             className={`h-8 rounded px-3 text-xs font-medium ${
-              mode === key ? "bg-zinc-950 text-white" : "text-zinc-600 hover:bg-zinc-100"
+              mode === key
+                ? "bg-zinc-950 text-white"
+                : "text-zinc-600 hover:bg-zinc-100"
             }`}
           >
             {label}
@@ -283,15 +313,20 @@ export function InteractiveJapanMap({
         ))}
       </div>
 
-      <div className="pointer-events-none absolute right-3 top-16 z-[1200] rounded-md border border-zinc-200 bg-white/95 px-3 py-1.5 text-xs text-zinc-600 shadow-sm">
+      {/* <div className="pointer-events-none absolute right-3 top-16 z-[1200] rounded-md border border-zinc-200 bg-white/95 px-3 py-1.5 text-xs text-zinc-600 shadow-sm">
         status:{status} / zoom:{zoomLevel}
         <div className="mt-0.5 text-[11px] text-zinc-500">
-          pref:{prefectureCount} sites:{sites.length} carriers:{carrierOffices.length} links:{carrierAssignments.length}
+          pref:{prefectureCount} sites:{sites.length} carriers:
+          {carrierOffices.length} links:{carrierAssignments.length}
         </div>
-      </div>
+      </div> */}
 
       <div className="pointer-events-none absolute bottom-3 right-3 z-[1200] rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-500 shadow-sm">
-        Scroll / pinch to zoom. Drag to pan.
+        Scroll / pinch to zoom. Drag to pan. status:{status} / zoom:{zoomLevel}
+        <div className="mt-0.5 text-[11px] text-zinc-500">
+          pref:{prefectureCount} sites:{sites.length} carriers:
+          {carrierOffices.length} links:{carrierAssignments.length}
+        </div>
       </div>
 
       <button
@@ -299,7 +334,10 @@ export function InteractiveJapanMap({
         onClick={() => {
           const map = mapRef.current;
           if (!map) return;
-          map.setView(initialCenter, initialZoom, { animate: true, duration: 0.5 });
+          map.setView(initialCenter, initialZoom, {
+            animate: true,
+            duration: 0.5,
+          });
           setZoomLevel(Number(initialZoom.toFixed(2)));
         }}
         className="pointer-events-auto absolute bottom-3 left-3 z-[1200] h-8 rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50"
