@@ -289,8 +289,10 @@ export default function Home() {
           <div className="flex min-w-0 items-center gap-4">
             <div className="grid h-9 w-9 place-items-center rounded-md bg-zinc-950 text-xs font-semibold text-white">NW</div>
             <div>
-              <p className="text-sm font-semibold tracking-tight text-zinc-950">Rollout Cloud</p>
-              <p className="text-xs text-zinc-500">全国 NW 更改 2026</p>
+              <p className="text-sm font-semibold tracking-tight text-zinc-950">
+                Rollout Cloud
+              </p>
+              <p className="text-xs text-zinc-500">NW更改案件2026</p>
             </div>
             <div className="hidden items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1 lg:flex">
               <span className="rounded-md bg-white px-2.5 py-1 text-xs font-medium text-zinc-900 shadow-sm">Overview</span>

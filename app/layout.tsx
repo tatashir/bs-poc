@@ -3,8 +3,8 @@ import "leaflet/dist/leaflet.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "NW更改 展開計画PoC",
-  description: "拠点情報と条件から負荷分散された展開計画案を生成するPoC",
+  title: "rollout-poc",
+  description: "pocです",
 };
 
 export default function RootLayout({
