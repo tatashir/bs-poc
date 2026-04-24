@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { InteractiveJapanMap } from "@/components/InteractiveJapanMap";
 import {
+  type CarrierOffice,
   assignSitesToCarrierOffices,
   calculateCarrierLoads,
   initialCarrierOffices,
@@ -45,6 +46,15 @@ type UploadState = {
 
 type Toast = {
   message: string;
+};
+
+type AssignmentRow = {
+  key: string;
+  site: Site;
+  office: CarrierOffice;
+  distanceKm: number;
+  warningCount: number;
+  scheduleMonth: string;
 };
 
 function createCapacities(setting: ProjectSetting): VendorCapacity[] {
@@ -165,6 +175,9 @@ export default function Home() {
   const [upload, setUpload] = useState<UploadState | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [focusedAssignmentKey, setFocusedAssignmentKey] = useState<string | null>(null);
+  const [pinnedAssignmentKey, setPinnedAssignmentKey] = useState<string | null>(null);
+  const [officeFilter, setOfficeFilter] = useState<string>("all");
 
   const months = useMemo(() => getMonthRange(projectSetting.startMonth, projectSetting.endMonth), []);
   const capacities = useMemo(() => createCapacities(projectSetting), []);
@@ -192,15 +205,50 @@ export default function Home() {
   const maxLoad = carrierLoads.reduce((max, load) => Math.max(max, load.loadRatio), 0);
   const completion = sites.length === 0 ? 0 : Math.round((plan.assignments.length / sites.length) * 100);
   const risk = maxLoad > 95 || warningCount > 8 ? "High" : maxLoad > 75 || warningCount > 0 ? "Medium" : "Low";
-  const topRisks = [
-    `Open warnings: ${warningCount}`,
-    `Max carrier load: ${maxLoad}%`,
-    `Sites with blackout month: ${sites.filter((site) => site.blackoutMonths.length > 0).length}`,
-  ];
+  const siteById = useMemo(() => new Map(sites.map((site) => [site.id, site])), [sites]);
+  const officeById = useMemo(
+    () => new Map(initialCarrierOffices.map((office) => [office.id, office])),
+    [],
+  );
+  const planBySiteId = useMemo(() => new Map(plan.assignments.map((assignment) => [assignment.siteId, assignment])), [plan.assignments]);
+  const assignmentRows = useMemo<AssignmentRow[]>(
+    () =>
+      assignments
+        .map((assignment) => {
+          const site = siteById.get(assignment.siteId);
+          const office = officeById.get(assignment.carrierOfficeId);
+          if (!site || !office) return null;
+          const scheduled = planBySiteId.get(site.id);
+          return {
+            key: `${site.id}::${office.id}`,
+            site,
+            office,
+            distanceKm: assignment.distanceKm,
+            warningCount: scheduled?.warnings.length ?? 0,
+            scheduleMonth: scheduled?.yearMonth ?? "-",
+          };
+        })
+        .filter((row): row is AssignmentRow => row !== null),
+    [assignments, officeById, planBySiteId, siteById],
+  );
+  const filteredAssignmentRows = useMemo(
+    () => assignmentRows.filter((row) => (officeFilter === "all" ? true : row.office.id === officeFilter)),
+    [assignmentRows, officeFilter],
+  );
+  const activeAssignmentKey = pinnedAssignmentKey ?? focusedAssignmentKey;
+  const activeAssignment = useMemo(
+    () => assignmentRows.find((row) => row.key === activeAssignmentKey) ?? null,
+    [activeAssignmentKey, assignmentRows],
+  );
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setFocusedAssignmentKey(null);
+    setPinnedAssignmentKey(null);
+  }, [sites]);
 
   function showToast(message: string) {
     setToast({ message });
@@ -229,31 +277,39 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-100 pt-14 text-zinc-950">
+    <main className="min-h-screen bg-zinc-100 pt-16 text-zinc-950">
       {toast && (
-        <div className="fixed right-5 top-[68px] z-[3100] rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 shadow-lg">
+        <div className="fixed right-5 top-[74px] z-[3100] rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 shadow-lg">
           {toast.message}
         </div>
       )}
 
       <header className="fixed inset-x-0 top-0 z-[3000] border-b border-zinc-300 bg-white">
-        <div className="mx-auto flex h-14 max-w-[1500px] items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <div className="grid h-8 w-8 place-items-center rounded bg-zinc-900 text-xs font-semibold text-white">NW</div>
+        <div className="mx-auto flex h-16 max-w-[1500px] items-center justify-between gap-4 px-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="grid h-9 w-9 place-items-center rounded-md bg-zinc-950 text-xs font-semibold text-white">NW</div>
             <div>
-              <p className="text-sm font-semibold">Rollout Dashboard</p>
+              <p className="text-sm font-semibold tracking-tight text-zinc-950">Rollout Cloud</p>
               <p className="text-xs text-zinc-500">全国 NW 更改 2026</p>
+            </div>
+            <div className="hidden items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1 lg:flex">
+              <span className="rounded-md bg-white px-2.5 py-1 text-xs font-medium text-zinc-900 shadow-sm">Overview</span>
+              <span className="px-2.5 py-1 text-xs font-medium text-zinc-500">Map</span>
+              <span className="px-2.5 py-1 text-xs font-medium text-zinc-500">Capacity</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <label className="inline-flex h-8 cursor-pointer items-center rounded border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
+            <span className="hidden rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-600 md:inline-flex">
+              Draft
+            </span>
+            <label className="inline-flex h-8 cursor-pointer items-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
               Import CSV
               <input type="file" accept=".csv,text/csv" onChange={handleCsvUpload} className="sr-only" />
             </label>
             <button
               type="button"
               onClick={() => showToast("Simulation refreshed")}
-              className="h-8 rounded bg-zinc-900 px-3 text-xs font-medium text-white hover:bg-zinc-800"
+              className="h-8 rounded-md bg-zinc-900 px-3 text-xs font-medium text-white hover:bg-zinc-800"
             >
               Run simulation
             </button>
@@ -261,7 +317,7 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="grid min-h-[calc(100vh-56px)] lg:grid-cols-[180px_minmax(0,1fr)]">
+      <div className="grid min-h-[calc(100vh-64px)] lg:grid-cols-[180px_minmax(0,1fr)]">
         <aside className="border-r border-zinc-200 bg-white">
           <div className="p-4">
             <p className="text-xs uppercase tracking-wide text-zinc-500">Workspace</p>
@@ -288,18 +344,65 @@ export default function Home() {
                   carrierOffices={initialCarrierOffices}
                   carrierAssignments={assignments}
                   warningBySiteId={warningBySiteId}
+                  highlightedSiteId={activeAssignment?.site.id ?? null}
+                  highlightedCarrierOfficeId={activeAssignment?.office.id ?? null}
                 />
               </div>
-              <Panel title="Plan review">
-                <div className="divide-y divide-zinc-100">
-                  {topRisks.map((item) => (
-                    <p key={item} className="px-4 py-3 text-sm text-zinc-700">
-                      {item}
-                    </p>
-                  ))}
-                  <p className="px-4 py-3 text-sm text-zinc-700">
-                    {upload ? `Last import: ${upload.importedAt}` : "Data source: default mock dataset"}
-                  </p>
+              <Panel
+                title="Site-Carrier mapping"
+                right={<span className="text-xs text-zinc-500">{filteredAssignmentRows.length} links</span>}
+              >
+                <div className="border-b border-zinc-100 px-4 py-3">
+                  <label className="text-xs font-medium text-zinc-600" htmlFor="office-filter">
+                    Carrier office
+                  </label>
+                  <select
+                    id="office-filter"
+                    value={officeFilter}
+                    onChange={(event) => setOfficeFilter(event.target.value)}
+                    className="mt-1 h-8 w-full rounded border border-zinc-300 px-2 text-xs text-zinc-700"
+                  >
+                    <option value="all">All offices</option>
+                    {initialCarrierOffices.map((office) => (
+                      <option key={office.id} value={office.id}>
+                        {office.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="max-h-[504px] overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="sticky top-0 bg-zinc-50 text-zinc-500">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Site</th>
+                        <th className="px-3 py-2 font-medium">Office</th>
+                        <th className="px-3 py-2 font-medium">Dist</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {filteredAssignmentRows.slice(0, 120).map((row) => {
+                        const active = activeAssignment?.key === row.key;
+                        return (
+                          <tr
+                            key={row.key}
+                            className={active ? "bg-blue-50" : "hover:bg-zinc-50"}
+                            onMouseEnter={() => setFocusedAssignmentKey(row.key)}
+                            onMouseLeave={() => setFocusedAssignmentKey(null)}
+                            onClick={() => setPinnedAssignmentKey((current) => (current === row.key ? null : row.key))}
+                          >
+                            <td className="px-3 py-2">
+                              <p className="font-medium text-zinc-900">{row.site.name}</p>
+                              <p className="text-[11px] text-zinc-500">
+                                {row.site.prefecture} / {row.scheduleMonth} / W:{row.warningCount}
+                              </p>
+                            </td>
+                            <td className="px-3 py-2 text-zinc-700">{row.office.prefecture}</td>
+                            <td className="px-3 py-2 text-zinc-700">{row.distanceKm}km</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </Panel>
             </section>

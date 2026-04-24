@@ -30,6 +30,8 @@ function getSiteCountByPrefecture(sites: Site[]) {
 }
 
 const prefectureFill = "#f1f5f9";
+const initialCenter: [number, number] = [36.5, 138.4];
+const initialZoom = 4.4;
 
 export function InteractiveJapanMap({
   sites,
@@ -72,7 +74,7 @@ export function InteractiveJapanMap({
         leafletRef.current = L;
 
         const map = L.map(containerRef.current, {
-          zoomControl: true,
+          zoomControl: false,
           minZoom: 3,
           maxZoom: 11,
           zoomSnap: 0.25,
@@ -80,8 +82,9 @@ export function InteractiveJapanMap({
           preferCanvas: true,
         });
         mapRef.current = map;
+        L.control.zoom({ position: "topright" }).addTo(map);
 
-        map.setView([36.5, 138.4], 4.4);
+        map.setView(initialCenter, initialZoom);
         setZoomLevel(Number(map.getZoom().toFixed(2)));
 
         const carrierLayer = L.layerGroup().addTo(map);
@@ -251,7 +254,7 @@ export function InteractiveJapanMap({
 
   return (
     <div className="relative h-full min-h-[520px] overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50">
-      <div ref={containerRef} className="absolute inset-0" />
+      <div ref={containerRef} className="absolute inset-0 z-0" />
 
       {status !== "ready" && (
         <div className="absolute inset-0 grid place-items-center bg-white/80">
@@ -261,7 +264,7 @@ export function InteractiveJapanMap({
         </div>
       )}
 
-      <div className="absolute left-3 top-3 flex rounded-md border border-zinc-200 bg-white p-1 shadow-sm">
+      <div className="pointer-events-auto absolute left-3 top-3 z-[1200] flex rounded-md border border-zinc-200 bg-white p-1 shadow-sm">
         {[
           ["sites", "Sites"],
           ["heatmap", "Heatmap"],
@@ -280,16 +283,29 @@ export function InteractiveJapanMap({
         ))}
       </div>
 
-      <div className="absolute right-3 top-3 rounded-md border border-zinc-200 bg-white/95 px-3 py-1.5 text-xs text-zinc-600 shadow-sm">
+      <div className="pointer-events-none absolute right-3 top-16 z-[1200] rounded-md border border-zinc-200 bg-white/95 px-3 py-1.5 text-xs text-zinc-600 shadow-sm">
         status:{status} / zoom:{zoomLevel}
         <div className="mt-0.5 text-[11px] text-zinc-500">
           pref:{prefectureCount} sites:{sites.length} carriers:{carrierOffices.length} links:{carrierAssignments.length}
         </div>
       </div>
 
-      <div className="absolute bottom-3 right-3 rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-500 shadow-sm">
+      <div className="pointer-events-none absolute bottom-3 right-3 z-[1200] rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-500 shadow-sm">
         Scroll / pinch to zoom. Drag to pan.
       </div>
+
+      <button
+        type="button"
+        onClick={() => {
+          const map = mapRef.current;
+          if (!map) return;
+          map.setView(initialCenter, initialZoom, { animate: true, duration: 0.5 });
+          setZoomLevel(Number(initialZoom.toFixed(2)));
+        }}
+        className="pointer-events-auto absolute bottom-3 left-3 z-[1200] h-8 rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50"
+      >
+        Reset view
+      </button>
     </div>
   );
 }
