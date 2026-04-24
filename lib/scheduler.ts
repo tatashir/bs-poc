@@ -119,16 +119,18 @@ export function generatePlan(
         const isBusy = setting.busySeasonMonths.includes(month.slice(5));
         const isOverMonthly = totalCount >= setting.monthlyMaximum;
         const isOverRegion = regionCount >= maxRegionCapacity;
+        const isUnderMinimumTarget = totalCount < setting.monthlyMinimum;
 
         let penalty = totalCount * 4 + regionCount * 3;
         if (isBlackout) penalty += 1000;
         if (isOverMonthly) penalty += 500;
         if (isOverRegion) penalty += 500;
+        if (isUnderMinimumTarget) penalty -= 18;
         if (isSnow && site.region === "北海道・東北") penalty += 80;
         if (isBusy) penalty += 40;
         if (site.difficulty === "高" && (isSnow || isBusy)) penalty += 30;
 
-        return { month, penalty, isBlackout, isSnow, isBusy, isOverMonthly, isOverRegion };
+        return { month, penalty, isBlackout, isSnow, isBusy, isOverMonthly, isOverRegion, isUnderMinimumTarget };
       })
       .sort((a, b) => a.penalty - b.penalty);
 
@@ -151,6 +153,7 @@ export function generatePlan(
       `難易度${site.difficulty}`,
       `${site.region}の月次負荷が相対的に低い月を選択`,
     ];
+    if (selected.isUnderMinimumTarget) reasonParts.push("月次 target minimum を満たしやすい月として優先");
     if (warnings.length > 0) reasonParts.push(`注意: ${warnings.join("、")}`);
 
     return {
