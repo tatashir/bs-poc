@@ -133,11 +133,27 @@ function MapMarkerRadiusIcon({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      fill="currentColor"
+      fill="none"
       className={className}
       aria-hidden="true"
     >
-      <path d="M2.28 14 1 15.28 6.72 21 8 19.72 6.28 18H17.72L16 19.72 17.28 21 23 15.28 21.72 14 20 15.72V14A8 8 0 0 0 14 6.26V4H16V2H8V4H10V6.26A8 8 0 0 0 4 14V15.72L2.28 14M6 14A6 6 0 0 1 10 8.35V14H6M14 14V8.35A6 6 0 0 1 18 14H14M10 16V17H14V16H10Z" />
+      <path
+        d="M8 3.5c-2.5 0-4.5 2-4.5 4.5 0 3.4 4.5 8.8 4.5 8.8s4.5-5.4 4.5-8.8c0-2.5-2-4.5-4.5-4.5Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <circle cx="8" cy="8" r="1.5" fill="currentColor" />
+      <path
+        d="M9.8 8.5h4.2a2.3 2.3 0 1 1 0 4.6h-1.6a2.3 2.3 0 1 0 0 4.6h3.4"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="18" cy="6.5" r="1.2" fill="currentColor" />
+      <circle cx="18" cy="12" r="1.2" fill="currentColor" />
+      <circle cx="18" cy="17.7" r="1.2" fill="currentColor" />
     </svg>
   );
 }
