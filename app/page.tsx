@@ -86,7 +86,10 @@ function toProjectSetting(setup: SetupState): ProjectSetting {
   };
 }
 
-function createCapacities(setting: ProjectSetting, profile: CapacityProfile): VendorCapacity[] {
+function createCapacities(
+  setting: ProjectSetting,
+  profile: CapacityProfile,
+): VendorCapacity[] {
   const factor = profileFactor[profile];
   const baseByRegion = {
     関東: 180,
@@ -106,7 +109,15 @@ function createCapacities(setting: ProjectSetting, profile: CapacityProfile): Ve
   );
 }
 
-function Panel({ title, right, children }: { title: string; right?: ReactNode; children: ReactNode }) {
+function Panel({
+  title,
+  right,
+  children,
+}: {
+  title: string;
+  right?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section className="rounded-md border border-zinc-200 bg-white">
       <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
@@ -120,15 +131,13 @@ function Panel({ title, right, children }: { title: string; right?: ReactNode; c
 
 function MapMarkerRadiusIcon({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-      <circle cx="12" cy="9" r="1.8" fill="currentColor" />
-      <circle cx="12" cy="9" r="3.8" stroke="currentColor" strokeOpacity="0.6" strokeWidth="1.2" />
-      <circle cx="12" cy="9" r="5.8" stroke="currentColor" strokeOpacity="0.35" strokeWidth="1.2" />
-      <path
-        d="M12 2.8c-3.2 0-5.8 2.5-5.8 5.7 0 4.2 5.8 11.7 5.8 11.7s5.8-7.5 5.8-11.7c0-3.2-2.6-5.7-5.8-5.7Z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-      />
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M2.28 14 1 15.28 6.72 21 8 19.72 6.28 18H17.72L16 19.72 17.28 21 23 15.28 21.72 14 20 15.72V14A8 8 0 0 0 14 6.26V4H16V2H8V4H10V6.26A8 8 0 0 0 4 14V15.72L2.28 14M6 14A6 6 0 0 1 10 8.35V14H6M14 14V8.35A6 6 0 0 1 18 14H14M10 16V17H14V16H10Z" />
     </svg>
   );
 }
@@ -143,9 +152,14 @@ export default function Home() {
   const [toast, setToast] = useState<Toast | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [simulation, setSimulation] = useState<SimulationState | null>(null);
-  const [focusedAssignmentKey, setFocusedAssignmentKey] = useState<string | null>(null);
-  const [pinnedAssignmentKey, setPinnedAssignmentKey] = useState<string | null>(null);
+  const [focusedAssignmentKey, setFocusedAssignmentKey] = useState<
+    string | null
+  >(null);
+  const [pinnedAssignmentKey, setPinnedAssignmentKey] = useState<string | null>(
+    null,
+  );
   const [officeFilter, setOfficeFilter] = useState<string>("all");
+  const [monthCursor, setMonthCursor] = useState(0);
 
   useEffect(() => {
     setDataSource((prev) => ({ ...prev, updatedAtMs: Date.now() }));
@@ -171,9 +185,16 @@ export default function Home() {
 
     const capacities = createCapacities(setting, setup.capacityProfile);
     const carrierOffices = createCarrierOffices(setup.provider);
-    const carrierAssignments = assignSitesToCarrierOffices(sampleSites, carrierOffices);
+    const carrierAssignments = assignSitesToCarrierOffices(
+      sampleSites,
+      carrierOffices,
+    );
     const generatedPlan = generatePlan(sampleSites, capacities, setting);
-    const carrierLoads = calculateCarrierLoads(carrierOffices, carrierAssignments, months.length);
+    const carrierLoads = calculateCarrierLoads(
+      carrierOffices,
+      carrierAssignments,
+      months.length,
+    );
 
     setSimulation({
       setting,
@@ -186,6 +207,7 @@ export default function Home() {
       generatedAt: new Date().toLocaleString("ja-JP"),
     });
     setOfficeFilter("all");
+    setMonthCursor(0);
     setFocusedAssignmentKey(null);
     setPinnedAssignmentKey(null);
     showToast("Map generated");
@@ -194,6 +216,7 @@ export default function Home() {
   function handleResetScenario() {
     setSimulation(null);
     setOfficeFilter("all");
+    setMonthCursor(0);
     setFocusedAssignmentKey(null);
     setPinnedAssignmentKey(null);
     setDrawerOpen(false);
@@ -203,9 +226,14 @@ export default function Home() {
   function handleExportCsv() {
     if (!simulation) return;
     const siteById = new Map(sampleSites.map((site) => [site.id, site]));
-    const officeById = new Map(simulation.carrierOffices.map((office) => [office.id, office]));
+    const officeById = new Map(
+      simulation.carrierOffices.map((office) => [office.id, office]),
+    );
     const planBySiteId = new Map(
-      simulation.generatedPlan.assignments.map((assignment) => [assignment.siteId, assignment]),
+      simulation.generatedPlan.assignments.map((assignment) => [
+        assignment.siteId,
+        assignment,
+      ]),
     );
 
     const rows = simulation.carrierAssignments.map((assignment) => {
@@ -226,8 +254,20 @@ export default function Home() {
     });
 
     const csv = [
-      ["siteId", "siteName", "sitePrefecture", "region", "carrierOffice", "officePrefecture", "distanceKm", "month", "warnings"].join(","),
-      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, "\"\"")}"`).join(",")),
+      [
+        "siteId",
+        "siteName",
+        "sitePrefecture",
+        "region",
+        "carrierOffice",
+        "officePrefecture",
+        "distanceKm",
+        "month",
+        "warnings",
+      ].join(","),
+      ...rows.map((row) =>
+        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
+      ),
     ].join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -249,16 +289,59 @@ export default function Home() {
     return `${Math.floor(diffSec / 86400)} d ago`;
   }
 
+  const selectedMonth =
+    simulation && monthCursor > 0
+      ? (simulation.months[monthCursor - 1] ?? null)
+      : null;
+  const filteredPlanAssignments = useMemo(
+    () =>
+      simulation?.generatedPlan.assignments.filter((assignment) =>
+        selectedMonth ? assignment.yearMonth === selectedMonth : true,
+      ) ?? [],
+    [selectedMonth, simulation],
+  );
+  const filteredSiteIds = useMemo(
+    () =>
+      new Set(filteredPlanAssignments.map((assignment) => assignment.siteId)),
+    [filteredPlanAssignments],
+  );
   const warningBySiteId = useMemo(
-    () => new Map(simulation?.generatedPlan.assignments.map((assignment) => [assignment.siteId, assignment.warnings.length]) ?? []),
-    [simulation],
+    () =>
+      new Map(
+        filteredPlanAssignments.map((assignment) => [
+          assignment.siteId,
+          assignment.warnings.length,
+        ]),
+      ),
+    [filteredPlanAssignments],
+  );
+  const mapSites = useMemo(
+    () =>
+      selectedMonth
+        ? sampleSites.filter((site) => filteredSiteIds.has(site.id))
+        : sampleSites,
+    [filteredSiteIds, selectedMonth],
+  );
+  const mapCarrierAssignments = useMemo(
+    () =>
+      simulation?.carrierAssignments.filter((assignment) =>
+        selectedMonth ? filteredSiteIds.has(assignment.siteId) : true,
+      ) ?? [],
+    [filteredSiteIds, selectedMonth, simulation],
   );
 
   const assignmentRows = useMemo<AssignmentRow[]>(() => {
     if (!simulation) return [];
     const siteById = new Map(sampleSites.map((site) => [site.id, site]));
-    const officeById = new Map(simulation.carrierOffices.map((office) => [office.id, office]));
-    const planBySiteId = new Map(simulation.generatedPlan.assignments.map((assignment) => [assignment.siteId, assignment]));
+    const officeById = new Map(
+      simulation.carrierOffices.map((office) => [office.id, office]),
+    );
+    const planBySiteId = new Map(
+      simulation.generatedPlan.assignments.map((assignment) => [
+        assignment.siteId,
+        assignment,
+      ]),
+    );
 
     return simulation.carrierAssignments
       .map((assignment) => {
@@ -279,24 +362,77 @@ export default function Home() {
   }, [simulation]);
 
   const filteredAssignmentRows = useMemo(
-    () => assignmentRows.filter((row) => (officeFilter === "all" ? true : row.office.id === officeFilter)),
-    [assignmentRows, officeFilter],
+    () =>
+      assignmentRows.filter((row) => {
+        if (officeFilter !== "all" && row.office.id !== officeFilter)
+          return false;
+        if (selectedMonth && row.scheduleMonth !== selectedMonth) return false;
+        return true;
+      }),
+    [assignmentRows, officeFilter, selectedMonth],
   );
 
   const activeAssignmentKey = pinnedAssignmentKey ?? focusedAssignmentKey;
   const activeAssignment = useMemo(
-    () => assignmentRows.find((row) => row.key === activeAssignmentKey) ?? null,
-    [activeAssignmentKey, assignmentRows],
+    () =>
+      filteredAssignmentRows.find((row) => row.key === activeAssignmentKey) ??
+      null,
+    [activeAssignmentKey, filteredAssignmentRows],
   );
 
-  const warningCount = simulation?.generatedPlan.assignments.reduce((total, assignment) => total + assignment.warnings.length, 0) ?? 0;
-  const maxLoad = simulation?.carrierLoads.reduce((max, load) => Math.max(max, load.loadRatio), 0) ?? 0;
-  const risk = maxLoad > 95 || warningCount > 8 ? "High" : maxLoad > 75 || warningCount > 0 ? "Medium" : "Low";
+  useEffect(() => {
+    if (!activeAssignmentKey) return;
+    const exists = filteredAssignmentRows.some(
+      (row) => row.key === activeAssignmentKey,
+    );
+    if (!exists) {
+      setFocusedAssignmentKey(null);
+      setPinnedAssignmentKey(null);
+    }
+  }, [activeAssignmentKey, filteredAssignmentRows]);
+
+  const warningCount = filteredPlanAssignments.reduce(
+    (total, assignment) => total + assignment.warnings.length,
+    0,
+  );
+  const maxLoad = useMemo(() => {
+    if (!simulation) return 0;
+    if (!selectedMonth)
+      return simulation.carrierLoads.reduce(
+        (max, load) => Math.max(max, load.loadRatio),
+        0,
+      );
+
+    const siteCountByOffice = new Map<string, number>();
+    for (const assignment of mapCarrierAssignments) {
+      siteCountByOffice.set(
+        assignment.carrierOfficeId,
+        (siteCountByOffice.get(assignment.carrierOfficeId) ?? 0) + 1,
+      );
+    }
+
+    return simulation.carrierOffices.reduce((max, office) => {
+      const assigned = siteCountByOffice.get(office.id) ?? 0;
+      const ratio =
+        office.monthlyCapacity > 0
+          ? Math.round((assigned / office.monthlyCapacity) * 100)
+          : 0;
+      return Math.max(max, ratio);
+    }, 0);
+  }, [mapCarrierAssignments, selectedMonth, simulation]);
+  const risk =
+    maxLoad > 95 || warningCount > 8
+      ? "High"
+      : maxLoad > 75 || warningCount > 0
+        ? "Medium"
+        : "Low";
   const monthlyAssignedCounts = useMemo(() => {
     if (!simulation) return [];
     return simulation.months.map((month) => ({
       month,
-      count: simulation.generatedPlan.assignments.filter((assignment) => assignment.yearMonth === month).length,
+      count: simulation.generatedPlan.assignments.filter(
+        (assignment) => assignment.yearMonth === month,
+      ).length,
     }));
   }, [simulation]);
   const peakMonth = monthlyAssignedCounts.reduce(
@@ -313,17 +449,26 @@ export default function Home() {
       )}
 
       {drawerOpen && (
-        <div className="fixed inset-0 z-[3300] bg-zinc-950/30" onClick={() => setDrawerOpen(false)}>
+        <div
+          className="fixed inset-0 z-[3300] bg-zinc-950/30"
+          onClick={() => setDrawerOpen(false)}
+        >
           <aside
             className="h-full w-[280px] border-r border-zinc-200 bg-white p-4"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center gap-2">
               <MapMarkerRadiusIcon className="h-5 w-5 text-blue-600" />
-              <p className="text-sm font-semibold text-zinc-900">Scenario Menu</p>
+              <p className="text-sm font-semibold text-zinc-900">
+                Scenario Menu
+              </p>
             </div>
-            <p className="mt-3 text-xs text-zinc-500">Demo data: {dataSource.label}</p>
-            <p className="mt-1 text-xs text-zinc-500">Updated: {formatRelativeTime(dataSource.updatedAtMs)}</p>
+            <p className="mt-3 text-xs text-zinc-500">
+              Demo data: {dataSource.label}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Updated: {formatRelativeTime(dataSource.updatedAtMs)}
+            </p>
 
             <div className="mt-5 grid gap-2">
               <button
@@ -366,8 +511,9 @@ export default function Home() {
             </button>
             <MapMarkerRadiusIcon className="h-6 w-6 text-blue-600" />
             <div>
-              <p className="text-sm font-semibold tracking-tight text-zinc-950">Rollout Cloud</p>
-              <p className="text-xs text-zinc-500">NW更改案件 2026</p>
+              <p className="text-sm font-semibold tracking-tight text-zinc-950">
+                Rollout Cloud
+              </p>
             </div>
           </div>
           <button
@@ -381,14 +527,26 @@ export default function Home() {
       </header>
 
       <div className="mx-auto grid max-w-[1500px] gap-4 px-3 py-3 sm:px-4 sm:py-4">
-        <Panel title="Setup" right={<span className="text-xs text-zinc-500">{dataSource.rowCount} sites</span>}>
+        <Panel
+          title="Setup"
+          right={
+            <span className="text-xs text-zinc-500">
+              {dataSource.rowCount} sites
+            </span>
+          }
+        >
           <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-5">
             <label className="text-xs text-zinc-600">
               Start month
               <input
                 type="month"
                 value={setup.startMonth}
-                onChange={(event) => setSetup((prev) => ({ ...prev, startMonth: event.target.value }))}
+                onChange={(event) =>
+                  setSetup((prev) => ({
+                    ...prev,
+                    startMonth: event.target.value,
+                  }))
+                }
                 className="mt-1 h-9 w-full rounded-md border border-zinc-300 px-2 text-sm text-zinc-800"
               />
             </label>
@@ -397,7 +555,12 @@ export default function Home() {
               <input
                 type="month"
                 value={setup.endMonth}
-                onChange={(event) => setSetup((prev) => ({ ...prev, endMonth: event.target.value }))}
+                onChange={(event) =>
+                  setSetup((prev) => ({
+                    ...prev,
+                    endMonth: event.target.value,
+                  }))
+                }
                 className="mt-1 h-9 w-full rounded-md border border-zinc-300 px-2 text-sm text-zinc-800"
               />
             </label>
@@ -405,7 +568,12 @@ export default function Home() {
               Carrier setup
               <select
                 value={setup.provider}
-                onChange={(event) => setSetup((prev) => ({ ...prev, provider: event.target.value as CarrierProvider }))}
+                onChange={(event) =>
+                  setSetup((prev) => ({
+                    ...prev,
+                    provider: event.target.value as CarrierProvider,
+                  }))
+                }
                 className="mt-1 h-9 w-full rounded-md border border-zinc-300 px-2 text-sm text-zinc-800"
               >
                 {carrierProviderOptions.map((provider) => (
@@ -419,7 +587,12 @@ export default function Home() {
               Capacity policy
               <select
                 value={setup.capacityProfile}
-                onChange={(event) => setSetup((prev) => ({ ...prev, capacityProfile: event.target.value as CapacityProfile }))}
+                onChange={(event) =>
+                  setSetup((prev) => ({
+                    ...prev,
+                    capacityProfile: event.target.value as CapacityProfile,
+                  }))
+                }
                 className="mt-1 h-9 w-full rounded-md border border-zinc-300 px-2 text-sm text-zinc-800"
               >
                 <option value="conservative">Conservative</option>
@@ -429,8 +602,12 @@ export default function Home() {
             </label>
             <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
               <p className="text-xs text-zinc-500">Data source</p>
-              <p className="mt-1 truncate text-sm font-medium text-zinc-900">{dataSource.label}</p>
-              <p className="mt-1 text-[11px] text-zinc-500">{formatRelativeTime(dataSource.updatedAtMs)}</p>
+              <p className="mt-1 truncate text-sm font-medium text-zinc-900">
+                {dataSource.label}
+              </p>
+              <p className="mt-1 text-[11px] text-zinc-500">
+                {formatRelativeTime(dataSource.updatedAtMs)}
+              </p>
             </div>
           </div>
         </Panel>
@@ -439,22 +616,70 @@ export default function Home() {
           <Panel title="Map">
             <div className="grid min-h-[380px] place-items-center p-6 text-center">
               <div>
-                <p className="text-sm font-medium text-zinc-900">前提条件を設定してシミュレーションを実行してください</p>
-                <p className="mt-1 text-xs text-zinc-500">データは Sample 100 を固定で使用します。</p>
+                <p className="text-sm font-medium text-zinc-900">
+                  前提条件を設定してシミュレーションを実行してください
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  データは Sample 100 を固定で使用します。
+                </p>
               </div>
             </div>
           </Panel>
         ) : (
           <>
             <Panel title="Summary">
+              <div className="border-b border-zinc-100 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMonthCursor(0)}
+                    className={`h-7 rounded-md px-2.5 text-xs font-medium ${
+                      monthCursor === 0
+                        ? "bg-blue-600 text-white"
+                        : "border border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50"
+                    }`}
+                  >
+                    All months
+                  </button>
+                  <span className="text-xs text-zinc-500">
+                    {selectedMonth ?? "All months"}
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={0}
+                    max={simulation.months.length}
+                    value={monthCursor}
+                    onChange={(event) =>
+                      setMonthCursor(Number(event.target.value))
+                    }
+                    className="h-1 w-full accent-blue-600"
+                  />
+                </div>
+                <div className="mt-2 flex justify-between text-[11px] text-zinc-500">
+                  <span>All</span>
+                  <span>{simulation.months[0]}</span>
+                  <span>{simulation.months[simulation.months.length - 1]}</span>
+                </div>
+              </div>
               <div className="flex flex-wrap items-center gap-2 px-4 py-3 text-xs text-zinc-600">
                 <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1">
-                  Assigned {simulation.generatedPlan.assignments.length} / {sampleSites.length}
+                  Assigned {filteredPlanAssignments.length} /{" "}
+                  {sampleSites.length}
                 </span>
-                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1">Peak {peakMonth.month}</span>
-                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1">Warnings {warningCount}</span>
-                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1">Risk {risk}</span>
-                <span className="ml-auto text-[11px] text-zinc-500">{simulation.generatedAt}</span>
+                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1">
+                  Peak {peakMonth.month}
+                </span>
+                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1">
+                  Warnings {warningCount}
+                </span>
+                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1">
+                  Risk {risk}
+                </span>
+                <span className="ml-auto text-[11px] text-zinc-500">
+                  {simulation.generatedAt}
+                </span>
               </div>
             </Panel>
 
@@ -462,19 +687,31 @@ export default function Home() {
               <Panel title="Map">
                 <div className="min-h-[560px] p-3">
                   <InteractiveJapanMap
-                    sites={sampleSites}
+                    sites={mapSites}
                     carrierOffices={simulation.carrierOffices}
-                    carrierAssignments={simulation.carrierAssignments}
+                    carrierAssignments={mapCarrierAssignments}
                     warningBySiteId={warningBySiteId}
                     highlightedSiteId={activeAssignment?.site.id ?? null}
-                    highlightedCarrierOfficeId={activeAssignment?.office.id ?? null}
+                    highlightedCarrierOfficeId={
+                      activeAssignment?.office.id ?? null
+                    }
                   />
                 </div>
               </Panel>
 
-              <Panel title="Site-Carrier mapping" right={<span className="text-xs text-zinc-500">{filteredAssignmentRows.length} links</span>}>
+              <Panel
+                title="Site-Carrier mapping"
+                right={
+                  <span className="text-xs text-zinc-500">
+                    {filteredAssignmentRows.length} links
+                  </span>
+                }
+              >
                 <div className="border-b border-zinc-100 px-4 py-3">
-                  <label className="text-xs font-medium text-zinc-600" htmlFor="office-filter">
+                  <label
+                    className="text-xs font-medium text-zinc-600"
+                    htmlFor="office-filter"
+                  >
                     Carrier office
                   </label>
                   <select
@@ -506,19 +743,34 @@ export default function Home() {
                         return (
                           <tr
                             key={row.key}
-                            className={active ? "bg-blue-50" : "hover:bg-zinc-50"}
-                            onMouseEnter={() => setFocusedAssignmentKey(row.key)}
+                            className={
+                              active ? "bg-blue-50" : "hover:bg-zinc-50"
+                            }
+                            onMouseEnter={() =>
+                              setFocusedAssignmentKey(row.key)
+                            }
                             onMouseLeave={() => setFocusedAssignmentKey(null)}
-                            onClick={() => setPinnedAssignmentKey((current) => (current === row.key ? null : row.key))}
+                            onClick={() =>
+                              setPinnedAssignmentKey((current) =>
+                                current === row.key ? null : row.key,
+                              )
+                            }
                           >
                             <td className="px-3 py-2">
-                              <p className="font-medium text-zinc-900">{row.site.name}</p>
+                              <p className="font-medium text-zinc-900">
+                                {row.site.name}
+                              </p>
                               <p className="text-[11px] text-zinc-500">
-                                {row.site.prefecture} / {row.scheduleMonth} / W:{row.warningCount}
+                                {row.site.prefecture} / {row.scheduleMonth} / W:
+                                {row.warningCount}
                               </p>
                             </td>
-                            <td className="px-3 py-2 text-zinc-700">{row.office.prefecture}</td>
-                            <td className="px-3 py-2 text-zinc-700">{row.distanceKm}km</td>
+                            <td className="px-3 py-2 text-zinc-700">
+                              {row.office.prefecture}
+                            </td>
+                            <td className="px-3 py-2 text-zinc-700">
+                              {row.distanceKm}km
+                            </td>
                           </tr>
                         );
                       })}
