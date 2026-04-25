@@ -175,7 +175,8 @@ export default function Home() {
     null,
   );
   const [officeFilter, setOfficeFilter] = useState<string>("all");
-  const [monthCursor, setMonthCursor] = useState(0);
+  const [monthMode, setMonthMode] = useState<"all" | "monthly">("all");
+  const [monthIndex, setMonthIndex] = useState(0);
 
   useEffect(() => {
     setDataSource((prev) => ({ ...prev, updatedAtMs: Date.now() }));
@@ -223,7 +224,8 @@ export default function Home() {
       generatedAt: new Date().toLocaleString("ja-JP"),
     });
     setOfficeFilter("all");
-    setMonthCursor(0);
+    setMonthMode("all");
+    setMonthIndex(0);
     setFocusedAssignmentKey(null);
     setPinnedAssignmentKey(null);
     showToast("Map generated");
@@ -232,7 +234,8 @@ export default function Home() {
   function handleResetScenario() {
     setSimulation(null);
     setOfficeFilter("all");
-    setMonthCursor(0);
+    setMonthMode("all");
+    setMonthIndex(0);
     setFocusedAssignmentKey(null);
     setPinnedAssignmentKey(null);
     setDrawerOpen(false);
@@ -306,8 +309,8 @@ export default function Home() {
   }
 
   const selectedMonth =
-    simulation && monthCursor > 0
-      ? (simulation.months[monthCursor - 1] ?? null)
+    simulation && monthMode === "monthly"
+      ? (simulation.months[monthIndex] ?? null)
       : null;
   const filteredPlanAssignments = useMemo(
     () =>
@@ -644,41 +647,6 @@ export default function Home() {
         ) : (
           <>
             <Panel title="Summary">
-              <div className="border-b border-zinc-100 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setMonthCursor(0)}
-                    className={`h-7 rounded-md px-2.5 text-xs font-medium ${
-                      monthCursor === 0
-                        ? "bg-blue-600 text-white"
-                        : "border border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50"
-                    }`}
-                  >
-                    All months
-                  </button>
-                  <span className="text-xs text-zinc-500">
-                    {selectedMonth ?? "All months"}
-                  </span>
-                </div>
-                <div className="mt-2 flex items-center gap-3">
-                  <input
-                    type="range"
-                    min={0}
-                    max={simulation.months.length}
-                    value={monthCursor}
-                    onChange={(event) =>
-                      setMonthCursor(Number(event.target.value))
-                    }
-                    className="h-1 w-full accent-blue-600"
-                  />
-                </div>
-                <div className="mt-2 flex justify-between text-[11px] text-zinc-500">
-                  <span>All</span>
-                  <span>{simulation.months[0]}</span>
-                  <span>{simulation.months[simulation.months.length - 1]}</span>
-                </div>
-              </div>
               <div className="flex flex-wrap items-center gap-2 px-4 py-3 text-xs text-zinc-600">
                 <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1">
                   Assigned {filteredPlanAssignments.length} /{" "}
@@ -701,7 +669,7 @@ export default function Home() {
 
             <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
               <Panel title="Map">
-                <div className="min-h-[560px] p-3">
+                <div className="h-[420px] p-3 sm:h-[560px]">
                   <InteractiveJapanMap
                     sites={mapSites}
                     carrierOffices={simulation.carrierOffices}
@@ -712,6 +680,57 @@ export default function Home() {
                       activeAssignment?.office.id ?? null
                     }
                   />
+                </div>
+                <div className="border-t border-zinc-100 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMonthMode("all")}
+                      className={`h-7 rounded-md px-2.5 text-xs font-medium ${
+                        monthMode === "all"
+                          ? "bg-blue-600 text-white"
+                          : "border border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50"
+                      }`}
+                    >
+                      All months
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMonthMode("monthly")}
+                      className={`h-7 rounded-md px-2.5 text-xs font-medium ${
+                        monthMode === "monthly"
+                          ? "bg-blue-600 text-white"
+                          : "border border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50"
+                      }`}
+                    >
+                      Monthly
+                    </button>
+                    <span className="text-xs text-zinc-500">
+                      {monthMode === "all" ? "All months" : selectedMonth}
+                    </span>
+                  </div>
+                  {monthMode === "monthly" && (
+                    <>
+                      <div className="mt-2 flex items-center gap-3">
+                        <input
+                          type="range"
+                          min={0}
+                          max={Math.max(0, simulation.months.length - 1)}
+                          value={monthIndex}
+                          onChange={(event) =>
+                            setMonthIndex(Number(event.target.value))
+                          }
+                          className="h-1 w-full accent-blue-600"
+                        />
+                      </div>
+                      <div className="mt-2 flex justify-between text-[11px] text-zinc-500">
+                        <span>{simulation.months[0]}</span>
+                        <span>
+                          {simulation.months[simulation.months.length - 1]}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </Panel>
 

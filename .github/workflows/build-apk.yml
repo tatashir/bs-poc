@@ -1,9 +1,9 @@
 name: Build APK
 
-# on:
-#   push:
-#     branches: [main]
-#   workflow_dispatch:
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -39,14 +39,14 @@ jobs:
           name: app-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
 
-      - name: Publish APK to fixed release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest-apk
-          name: Latest APK
-          prerelease: true
-          files: android/app/build/outputs/apk/debug/*.apk
-          overwrite_files: true
-          generate_release_notes: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Publish APK to fixed release
+      #   uses: softprops/action-gh-release@v2
+      #   with:
+      #     tag_name: latest-apk
+      #     name: Latest APK
+      #     prerelease: true
+      #     files: android/app/build/outputs/apk/debug/*.apk
+      #     overwrite_files: true
+      #     generate_release_notes: false
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
