@@ -65,6 +65,7 @@ export function InteractiveJapanMap({
   const [error, setError] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(4.4);
   const [prefectureCount, setPrefectureCount] = useState(0);
+  const [mapInitialized, setMapInitialized] = useState(false);
   const siteCountByPrefecture = useMemo(
     () => getSiteCountByPrefecture(sites),
     [sites],
@@ -101,6 +102,7 @@ export function InteractiveJapanMap({
         carrierLayerRef.current = carrierLayer;
         siteLayerRef.current = siteLayer;
         linksLayerRef.current = linksLayer;
+        setMapInitialized(true);
 
         map.on("zoomend", () => {
           setZoomLevel(Number(map.getZoom().toFixed(2)));
@@ -152,6 +154,7 @@ export function InteractiveJapanMap({
       siteLayerRef.current = null;
       carrierLayerRef.current = null;
       leafletRef.current = null;
+      setMapInitialized(false);
     };
   }, []);
 
@@ -274,6 +277,7 @@ export function InteractiveJapanMap({
     carrierOffices,
     highlightedCarrierOfficeId,
     highlightedSiteId,
+    mapInitialized,
     mode,
     siteCountByPrefecture,
     sites,
@@ -281,7 +285,7 @@ export function InteractiveJapanMap({
   ]);
 
   return (
-    <div className="relative h-full min-h-[520px] overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50">
+    <div className="relative h-full min-h-[380px] overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 sm:min-h-[520px]">
       <div ref={containerRef} className="absolute inset-0 z-0" />
 
       {status !== "ready" && (
@@ -292,7 +296,7 @@ export function InteractiveJapanMap({
         </div>
       )}
 
-      <div className="pointer-events-auto absolute left-3 top-3 z-[1200] flex rounded-md border border-zinc-200 bg-white p-1 shadow-sm">
+      <div className="pointer-events-auto absolute left-3 top-3 z-[1200] flex max-w-[calc(100%-1.5rem)] overflow-x-auto rounded-md border border-zinc-200 bg-white p-1 shadow-sm">
         {[
           ["sites", "Sites"],
           ["heatmap", "Heatmap"],
@@ -302,9 +306,9 @@ export function InteractiveJapanMap({
             key={key}
             type="button"
             onClick={() => setMode(key as "sites" | "heatmap" | "links")}
-            className={`h-8 rounded px-3 text-xs font-medium ${
+            className={`h-8 shrink-0 rounded px-3 text-xs font-medium ${
               mode === key
-                ? "bg-zinc-950 text-white"
+                ? "bg-blue-600 text-white"
                 : "text-zinc-600 hover:bg-zinc-100"
             }`}
           >
@@ -313,15 +317,7 @@ export function InteractiveJapanMap({
         ))}
       </div>
 
-      {/* <div className="pointer-events-none absolute right-3 top-16 z-[1200] rounded-md border border-zinc-200 bg-white/95 px-3 py-1.5 text-xs text-zinc-600 shadow-sm">
-        status:{status} / zoom:{zoomLevel}
-        <div className="mt-0.5 text-[11px] text-zinc-500">
-          pref:{prefectureCount} sites:{sites.length} carriers:
-          {carrierOffices.length} links:{carrierAssignments.length}
-        </div>
-      </div> */}
-
-      <div className="pointer-events-none absolute bottom-3 right-3 z-[1200] rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-500 shadow-sm">
+      <div className="pointer-events-none absolute bottom-3 right-3 z-[1200] hidden rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-500 shadow-sm sm:block">
         Scroll / pinch to zoom. Drag to pan. status:{status} / zoom:{zoomLevel}
         <div className="mt-0.5 text-[11px] text-zinc-500">
           pref:{prefectureCount} sites:{sites.length} carriers:
@@ -340,7 +336,7 @@ export function InteractiveJapanMap({
           });
           setZoomLevel(Number(initialZoom.toFixed(2)));
         }}
-        className="pointer-events-auto absolute bottom-3 left-3 z-[1200] h-8 rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50"
+        className="pointer-events-auto absolute bottom-3 left-3 z-[1200] h-8 rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm hover:border-blue-300 hover:bg-blue-50"
       >
         Reset view
       </button>

@@ -1,51 +1,56 @@
 "use client";
 
-import { type ChangeEvent, useEffect, useMemo, useState } from "react";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { InteractiveJapanMap } from "@/components/InteractiveJapanMap";
 import {
+  type CarrierAssignment,
+  type CarrierLoad,
   type CarrierOffice,
+  type CarrierProvider,
   assignSitesToCarrierOffices,
   calculateCarrierLoads,
-  initialCarrierOffices,
+  carrierProviderOptions,
+  createCarrierOffices,
+  initialCarrierProvider,
 } from "@/lib/carrier-offices";
 import {
   generatePlan,
   getMonthRange,
+  type GeneratedPlan,
   type ProjectSetting,
-  type Region,
   type Site,
   type VendorCapacity,
 } from "@/lib/scheduler";
 import { createSiteSet, regions } from "@/lib/site-sets";
 
-const projectSetting: ProjectSetting = {
-  startMonth: "2026-04",
-  endMonth: "2026-12",
-  monthlyMinimum: 120,
-  monthlyMaximum: 180,
-  snowSeasonMonths: ["01", "02", "12"],
-  busySeasonMonths: ["03", "04", "09"],
+const sampleSites = createSiteSet("scale-100");
+
+type CapacityProfile = "balanced" | "conservative" | "aggressive";
+
+type SetupState = {
+  startMonth: string;
+  endMonth: string;
+  provider: CarrierProvider;
+  capacityProfile: CapacityProfile;
 };
 
-const defaultSites = createSiteSet("scale-100");
-
-type UploadState = {
-  fileName: string;
-  importedAt: string;
+type DataSourceState = {
+  label: string;
   rowCount: number;
+  updatedAtMs: number;
 };
 
-type Toast = {
-  message: string;
+type Toast = { message: string };
+
+type SimulationState = {
+  setting: ProjectSetting;
+  months: string[];
+  capacities: VendorCapacity[];
+  generatedPlan: GeneratedPlan;
+  carrierOffices: CarrierOffice[];
+  carrierAssignments: CarrierAssignment[];
+  carrierLoads: CarrierLoad[];
+  generatedAt: string;
 };
 
 type AssignmentRow = {
@@ -57,108 +62,51 @@ type AssignmentRow = {
   scheduleMonth: string;
 };
 
-function createCapacities(setting: ProjectSetting): VendorCapacity[] {
+const defaultSetup: SetupState = {
+  startMonth: "2026-04",
+  endMonth: "2026-12",
+  provider: initialCarrierProvider,
+  capacityProfile: "balanced",
+};
+
+const profileFactor: Record<CapacityProfile, number> = {
+  conservative: 0.88,
+  balanced: 1,
+  aggressive: 1.15,
+};
+
+function toProjectSetting(setup: SetupState): ProjectSetting {
+  return {
+    startMonth: setup.startMonth,
+    endMonth: setup.endMonth,
+    monthlyMinimum: 120,
+    monthlyMaximum: 180,
+    snowSeasonMonths: ["01", "02", "12"],
+    busySeasonMonths: ["03", "04", "09"],
+  };
+}
+
+function createCapacities(setting: ProjectSetting, profile: CapacityProfile): VendorCapacity[] {
+  const factor = profileFactor[profile];
+  const baseByRegion = {
+    関東: 180,
+    関西: 140,
+    中部: 120,
+    "北海道・東北": 110,
+    "中国・四国": 110,
+    "九州・沖縄": 110,
+  } as const;
+
   return regions.flatMap((region) =>
     getMonthRange(setting.startMonth, setting.endMonth).map((yearMonth) => ({
       region,
       yearMonth,
-      maxCapacity: region === "関東" ? 180 : region === "関西" ? 140 : 110,
+      maxCapacity: Math.max(30, Math.round(baseByRegion[region] * factor)),
     })),
   );
 }
 
-function parseCsvLine(line: string) {
-  const values: string[] = [];
-  let current = "";
-  let quoted = false;
-
-  for (const char of line) {
-    if (char === "\"") {
-      quoted = !quoted;
-    } else if (char === "," && !quoted) {
-      values.push(current.trim());
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-
-  values.push(current.trim());
-  return values.map((value) => value.replace(/^"|"$/g, ""));
-}
-
-function normalizeDifficulty(value: string): Site["difficulty"] {
-  if (value === "高" || value.toLowerCase() === "high") return "高";
-  if (value === "中" || value.toLowerCase() === "medium") return "中";
-  return "低";
-}
-
-function normalizePriority(value: string): Site["priority"] {
-  if (value === "高" || value.toLowerCase() === "high") return "高";
-  if (value === "中" || value.toLowerCase() === "medium") return "中";
-  return "低";
-}
-
-function normalizeRegion(value: string): Region {
-  return regions.find((region) => region === value) ?? "関東";
-}
-
-function parseSitesCsv(text: string): Site[] {
-  const [headerLine, ...lines] = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
-  if (!headerLine) return [];
-
-  const headers = parseCsvLine(headerLine).map((header) => header.trim());
-  const indexOf = (name: string) => headers.findIndex((header) => header.toLowerCase() === name.toLowerCase());
-
-  return lines
-    .map((line, index) => {
-      const values = parseCsvLine(line);
-      const get = (name: string, fallback = "") => {
-        const position = indexOf(name);
-        return position >= 0 ? values[position] ?? fallback : fallback;
-      };
-
-      const latitude = Number(get("latitude", "35.68"));
-      const longitude = Number(get("longitude", "139.76"));
-      const blackoutMonths = get("blackoutMonths")
-        .split(/[|;]/)
-        .map((month) => month.trim())
-        .filter(Boolean);
-
-      return {
-        id: get("id", `CSV-${String(index + 1).padStart(4, "0")}`),
-        name: get("name", `Imported site ${index + 1}`),
-        prefecture: get("prefecture", "東京"),
-        region: normalizeRegion(get("region", "関東")),
-        latitude: Number.isFinite(latitude) ? latitude : 35.68,
-        longitude: Number.isFinite(longitude) ? longitude : 139.76,
-        difficulty: normalizeDifficulty(get("difficulty", "中")),
-        priority: normalizePriority(get("priority", "中")),
-        blackoutMonths: blackoutMonths.map((month) => month.padStart(2, "0")),
-      };
-    })
-    .filter((site) => site.name.length > 0);
-}
-
-function KpiCard({ label, value, helper }: { label: string; value: string; helper: string }) {
-  return (
-    <div className="rounded-md border border-zinc-200 bg-white p-4">
-      <p className="text-xs font-medium uppercase text-zinc-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-zinc-950">{value}</p>
-      <p className="mt-1 text-xs text-zinc-500">{helper}</p>
-    </div>
-  );
-}
-
-function Panel({
-  title,
-  children,
-  right,
-}: {
-  title: string;
-  children: React.ReactNode;
-  right?: React.ReactNode;
-}) {
+function Panel({ title, right, children }: { title: string; right?: ReactNode; children: ReactNode }) {
   return (
     <section className="rounded-md border border-zinc-200 bg-white">
       <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
@@ -170,190 +118,361 @@ function Panel({
   );
 }
 
+function MapMarkerRadiusIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <circle cx="12" cy="9" r="1.8" fill="currentColor" />
+      <circle cx="12" cy="9" r="3.8" stroke="currentColor" strokeOpacity="0.6" strokeWidth="1.2" />
+      <circle cx="12" cy="9" r="5.8" stroke="currentColor" strokeOpacity="0.35" strokeWidth="1.2" />
+      <path
+        d="M12 2.8c-3.2 0-5.8 2.5-5.8 5.7 0 4.2 5.8 11.7 5.8 11.7s5.8-7.5 5.8-11.7c0-3.2-2.6-5.7-5.8-5.7Z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
+    </svg>
+  );
+}
+
 export default function Home() {
-  const [sites, setSites] = useState<Site[]>(defaultSites);
-  const [upload, setUpload] = useState<UploadState | null>(null);
+  const [setup, setSetup] = useState<SetupState>(defaultSetup);
+  const [dataSource, setDataSource] = useState<DataSourceState>({
+    label: "Sample sites (100)",
+    rowCount: 100,
+    updatedAtMs: 0,
+  });
   const [toast, setToast] = useState<Toast | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [simulation, setSimulation] = useState<SimulationState | null>(null);
   const [focusedAssignmentKey, setFocusedAssignmentKey] = useState<string | null>(null);
   const [pinnedAssignmentKey, setPinnedAssignmentKey] = useState<string | null>(null);
   const [officeFilter, setOfficeFilter] = useState<string>("all");
 
-  const months = useMemo(() => getMonthRange(projectSetting.startMonth, projectSetting.endMonth), []);
-  const capacities = useMemo(() => createCapacities(projectSetting), []);
-  const plan = useMemo(() => generatePlan(sites, capacities, projectSetting), [capacities, sites]);
-  const assignments = useMemo(() => assignSitesToCarrierOffices(sites, initialCarrierOffices), [sites]);
-  const carrierLoads = useMemo(
-    () => calculateCarrierLoads(initialCarrierOffices, assignments, months.length),
-    [assignments, months.length],
-  );
-
-  const monthlyData = useMemo(
-    () =>
-      months.map((month) => ({
-        month,
-        assigned: plan.assignments.filter((assignment) => assignment.yearMonth === month).length,
-      })),
-    [months, plan.assignments],
-  );
-
-  const warningCount = plan.assignments.reduce((total, assignment) => total + assignment.warnings.length, 0);
-  const warningBySiteId = useMemo(
-    () => new Map(plan.assignments.map((assignment) => [assignment.siteId, assignment.warnings.length])),
-    [plan.assignments],
-  );
-  const maxLoad = carrierLoads.reduce((max, load) => Math.max(max, load.loadRatio), 0);
-  const completion = sites.length === 0 ? 0 : Math.round((plan.assignments.length / sites.length) * 100);
-  const risk = maxLoad > 95 || warningCount > 8 ? "High" : maxLoad > 75 || warningCount > 0 ? "Medium" : "Low";
-  const siteById = useMemo(() => new Map(sites.map((site) => [site.id, site])), [sites]);
-  const officeById = useMemo(
-    () => new Map(initialCarrierOffices.map((office) => [office.id, office])),
-    [],
-  );
-  const planBySiteId = useMemo(() => new Map(plan.assignments.map((assignment) => [assignment.siteId, assignment])), [plan.assignments]);
-  const assignmentRows = useMemo<AssignmentRow[]>(
-    () =>
-      assignments
-        .map((assignment) => {
-          const site = siteById.get(assignment.siteId);
-          const office = officeById.get(assignment.carrierOfficeId);
-          if (!site || !office) return null;
-          const scheduled = planBySiteId.get(site.id);
-          return {
-            key: `${site.id}::${office.id}`,
-            site,
-            office,
-            distanceKm: assignment.distanceKm,
-            warningCount: scheduled?.warnings.length ?? 0,
-            scheduleMonth: scheduled?.yearMonth ?? "-",
-          };
-        })
-        .filter((row): row is AssignmentRow => row !== null),
-    [assignments, officeById, planBySiteId, siteById],
-  );
-  const filteredAssignmentRows = useMemo(
-    () => assignmentRows.filter((row) => (officeFilter === "all" ? true : row.office.id === officeFilter)),
-    [assignmentRows, officeFilter],
-  );
-  const activeAssignmentKey = pinnedAssignmentKey ?? focusedAssignmentKey;
-  const activeAssignment = useMemo(
-    () => assignmentRows.find((row) => row.key === activeAssignmentKey) ?? null,
-    [activeAssignmentKey, assignmentRows],
-  );
-
   useEffect(() => {
-    setMounted(true);
+    setDataSource((prev) => ({ ...prev, updatedAtMs: Date.now() }));
   }, []);
-
-  useEffect(() => {
-    setFocusedAssignmentKey(null);
-    setPinnedAssignmentKey(null);
-  }, [sites]);
 
   function showToast(message: string) {
     setToast({ message });
     window.setTimeout(() => setToast(null), 2200);
   }
 
-  function handleCsvUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const parsed = parseSitesCsv(String(reader.result ?? ""));
-      if (parsed.length === 0) {
-        showToast("CSVに有効な拠点行がありません。");
-        return;
-      }
-      setSites(parsed);
-      setUpload({
-        fileName: file.name,
-        importedAt: new Date().toLocaleString("ja-JP"),
-        rowCount: parsed.length,
-      });
-      showToast(`${parsed.length} sites imported`);
-    };
-    reader.readAsText(file);
+  function handleGenerate() {
+    if (setup.startMonth > setup.endMonth) {
+      showToast("期間が不正です。開始月は終了月以前を指定してください。");
+      return;
+    }
+
+    const setting = toProjectSetting(setup);
+    const months = getMonthRange(setting.startMonth, setting.endMonth);
+    if (months.length === 0) {
+      showToast("期間の月が取得できませんでした。設定を確認してください。");
+      return;
+    }
+
+    const capacities = createCapacities(setting, setup.capacityProfile);
+    const carrierOffices = createCarrierOffices(setup.provider);
+    const carrierAssignments = assignSitesToCarrierOffices(sampleSites, carrierOffices);
+    const generatedPlan = generatePlan(sampleSites, capacities, setting);
+    const carrierLoads = calculateCarrierLoads(carrierOffices, carrierAssignments, months.length);
+
+    setSimulation({
+      setting,
+      months,
+      capacities,
+      generatedPlan,
+      carrierOffices,
+      carrierAssignments,
+      carrierLoads,
+      generatedAt: new Date().toLocaleString("ja-JP"),
+    });
+    setOfficeFilter("all");
+    setFocusedAssignmentKey(null);
+    setPinnedAssignmentKey(null);
+    showToast("Map generated");
   }
 
+  function handleResetScenario() {
+    setSimulation(null);
+    setOfficeFilter("all");
+    setFocusedAssignmentKey(null);
+    setPinnedAssignmentKey(null);
+    setDrawerOpen(false);
+    showToast("Scenario reset");
+  }
+
+  function handleExportCsv() {
+    if (!simulation) return;
+    const siteById = new Map(sampleSites.map((site) => [site.id, site]));
+    const officeById = new Map(simulation.carrierOffices.map((office) => [office.id, office]));
+    const planBySiteId = new Map(
+      simulation.generatedPlan.assignments.map((assignment) => [assignment.siteId, assignment]),
+    );
+
+    const rows = simulation.carrierAssignments.map((assignment) => {
+      const site = siteById.get(assignment.siteId);
+      const office = officeById.get(assignment.carrierOfficeId);
+      const plan = planBySiteId.get(assignment.siteId);
+      return [
+        assignment.siteId,
+        site?.name ?? "",
+        site?.prefecture ?? "",
+        site?.region ?? "",
+        office?.name ?? "",
+        office?.prefecture ?? "",
+        String(assignment.distanceKm),
+        plan?.yearMonth ?? "",
+        String(plan?.warnings.length ?? 0),
+      ];
+    });
+
+    const csv = [
+      ["siteId", "siteName", "sitePrefecture", "region", "carrierOffice", "officePrefecture", "distanceKm", "month", "warnings"].join(","),
+      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, "\"\"")}"`).join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "rollout_mapping_export.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast("CSV exported");
+  }
+
+  function formatRelativeTime(updatedAtMs: number) {
+    if (!updatedAtMs) return "--";
+    const diffSec = Math.max(0, Math.floor((Date.now() - updatedAtMs) / 1000));
+    if (diffSec < 60) return "just now";
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)} min ago`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} h ago`;
+    return `${Math.floor(diffSec / 86400)} d ago`;
+  }
+
+  const warningBySiteId = useMemo(
+    () => new Map(simulation?.generatedPlan.assignments.map((assignment) => [assignment.siteId, assignment.warnings.length]) ?? []),
+    [simulation],
+  );
+
+  const assignmentRows = useMemo<AssignmentRow[]>(() => {
+    if (!simulation) return [];
+    const siteById = new Map(sampleSites.map((site) => [site.id, site]));
+    const officeById = new Map(simulation.carrierOffices.map((office) => [office.id, office]));
+    const planBySiteId = new Map(simulation.generatedPlan.assignments.map((assignment) => [assignment.siteId, assignment]));
+
+    return simulation.carrierAssignments
+      .map((assignment) => {
+        const site = siteById.get(assignment.siteId);
+        const office = officeById.get(assignment.carrierOfficeId);
+        if (!site || !office) return null;
+        const scheduled = planBySiteId.get(site.id);
+        return {
+          key: `${site.id}::${office.id}`,
+          site,
+          office,
+          distanceKm: assignment.distanceKm,
+          warningCount: scheduled?.warnings.length ?? 0,
+          scheduleMonth: scheduled?.yearMonth ?? "-",
+        };
+      })
+      .filter((row): row is AssignmentRow => row !== null);
+  }, [simulation]);
+
+  const filteredAssignmentRows = useMemo(
+    () => assignmentRows.filter((row) => (officeFilter === "all" ? true : row.office.id === officeFilter)),
+    [assignmentRows, officeFilter],
+  );
+
+  const activeAssignmentKey = pinnedAssignmentKey ?? focusedAssignmentKey;
+  const activeAssignment = useMemo(
+    () => assignmentRows.find((row) => row.key === activeAssignmentKey) ?? null,
+    [activeAssignmentKey, assignmentRows],
+  );
+
+  const warningCount = simulation?.generatedPlan.assignments.reduce((total, assignment) => total + assignment.warnings.length, 0) ?? 0;
+  const maxLoad = simulation?.carrierLoads.reduce((max, load) => Math.max(max, load.loadRatio), 0) ?? 0;
+  const risk = maxLoad > 95 || warningCount > 8 ? "High" : maxLoad > 75 || warningCount > 0 ? "Medium" : "Low";
+  const monthlyAssignedCounts = useMemo(() => {
+    if (!simulation) return [];
+    return simulation.months.map((month) => ({
+      month,
+      count: simulation.generatedPlan.assignments.filter((assignment) => assignment.yearMonth === month).length,
+    }));
+  }, [simulation]);
+  const peakMonth = monthlyAssignedCounts.reduce(
+    (peak, current) => (current.count > peak.count ? current : peak),
+    { month: "-", count: 0 },
+  );
+
   return (
-    <main className="min-h-screen bg-zinc-100 pt-16 text-zinc-950">
+    <main className="min-h-screen bg-zinc-100 pt-14 text-zinc-950">
       {toast && (
-        <div className="fixed right-5 top-[74px] z-[3100] rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 shadow-lg">
+        <div className="fixed right-4 top-[66px] z-[3200] rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 shadow-lg">
           {toast.message}
         </div>
       )}
 
-      <header className="fixed inset-x-0 top-0 z-[3000] border-b border-zinc-300 bg-white">
-        <div className="mx-auto flex h-16 max-w-[1500px] items-center justify-between gap-4 px-4">
-          <div className="flex min-w-0 items-center gap-4">
-            <div className="grid h-9 w-9 place-items-center rounded-md bg-zinc-950 text-xs font-semibold text-white">NW</div>
-            <div>
-              <p className="text-sm font-semibold tracking-tight text-zinc-950">
-                Rollout Cloud
-              </p>
-              <p className="text-xs text-zinc-500">NW更改案件2026</p>
+      {drawerOpen && (
+        <div className="fixed inset-0 z-[3300] bg-zinc-950/30" onClick={() => setDrawerOpen(false)}>
+          <aside
+            className="h-full w-[280px] border-r border-zinc-200 bg-white p-4"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center gap-2">
+              <MapMarkerRadiusIcon className="h-5 w-5 text-blue-600" />
+              <p className="text-sm font-semibold text-zinc-900">Scenario Menu</p>
             </div>
-            <div className="hidden items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1 lg:flex">
-              <span className="rounded-md bg-white px-2.5 py-1 text-xs font-medium text-zinc-900 shadow-sm">Overview</span>
-              <span className="px-2.5 py-1 text-xs font-medium text-zinc-500">Map</span>
-              <span className="px-2.5 py-1 text-xs font-medium text-zinc-500">Capacity</span>
+            <p className="mt-3 text-xs text-zinc-500">Demo data: {dataSource.label}</p>
+            <p className="mt-1 text-xs text-zinc-500">Updated: {formatRelativeTime(dataSource.updatedAtMs)}</p>
+
+            <div className="mt-5 grid gap-2">
+              <button
+                type="button"
+                onClick={handleResetScenario}
+                className="h-9 rounded-md border border-zinc-300 bg-white px-3 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              >
+                Reset Scenario
+              </button>
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                disabled={!simulation}
+                className="h-9 rounded-md border border-zinc-300 bg-white px-3 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Export Mapping CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(false)}
+                className="h-9 rounded-md border border-zinc-300 bg-zinc-50 px-3 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+              >
+                Close menu
+              </button>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-600 md:inline-flex">
-              Draft
-            </span>
-            <label className="inline-flex h-8 cursor-pointer items-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
-              Import CSV
-              <input type="file" accept=".csv,text/csv" onChange={handleCsvUpload} className="sr-only" />
-            </label>
+          </aside>
+        </div>
+      )}
+
+      <header className="fixed inset-x-0 top-0 z-[3000] border-b border-zinc-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-[1500px] items-center justify-between px-3 sm:px-4">
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => showToast("Simulation refreshed")}
-              className="h-8 rounded-md bg-zinc-900 px-3 text-xs font-medium text-white hover:bg-zinc-800"
+              onClick={() => setDrawerOpen(true)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"
+              aria-label="Open menu"
             >
-              Run simulation
+              <span className="text-base leading-none">≡</span>
             </button>
+            <MapMarkerRadiusIcon className="h-6 w-6 text-blue-600" />
+            <div>
+              <p className="text-sm font-semibold tracking-tight text-zinc-950">Rollout Cloud</p>
+              <p className="text-xs text-zinc-500">NW更改案件 2026</p>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={handleGenerate}
+            className="h-8 rounded-md bg-blue-600 px-3 text-xs font-medium text-white hover:bg-blue-500"
+          >
+            {simulation ? "Run Again" : "Run Simulation"}
+          </button>
         </div>
       </header>
 
-      <div className="grid min-h-[calc(100vh-64px)] lg:grid-cols-[180px_minmax(0,1fr)]">
-        <aside className="border-r border-zinc-200 bg-white">
-          <div className="p-4">
-            <p className="text-xs uppercase tracking-wide text-zinc-500">Workspace</p>
-            <p className="mt-1 text-sm font-semibold text-zinc-950">Network Rollout</p>
-            <div className="mt-5 rounded-md border border-zinc-200 bg-zinc-50 p-3">
-              <p className="text-[11px] uppercase tracking-wide text-zinc-500">Current</p>
-              <p className="mt-1 text-sm font-medium text-zinc-950">Dashboard</p>
+      <div className="mx-auto grid max-w-[1500px] gap-4 px-3 py-3 sm:px-4 sm:py-4">
+        <Panel title="Setup" right={<span className="text-xs text-zinc-500">{dataSource.rowCount} sites</span>}>
+          <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-5">
+            <label className="text-xs text-zinc-600">
+              Start month
+              <input
+                type="month"
+                value={setup.startMonth}
+                onChange={(event) => setSetup((prev) => ({ ...prev, startMonth: event.target.value }))}
+                className="mt-1 h-9 w-full rounded-md border border-zinc-300 px-2 text-sm text-zinc-800"
+              />
+            </label>
+            <label className="text-xs text-zinc-600">
+              End month
+              <input
+                type="month"
+                value={setup.endMonth}
+                onChange={(event) => setSetup((prev) => ({ ...prev, endMonth: event.target.value }))}
+                className="mt-1 h-9 w-full rounded-md border border-zinc-300 px-2 text-sm text-zinc-800"
+              />
+            </label>
+            <label className="text-xs text-zinc-600">
+              Carrier setup
+              <select
+                value={setup.provider}
+                onChange={(event) => setSetup((prev) => ({ ...prev, provider: event.target.value as CarrierProvider }))}
+                className="mt-1 h-9 w-full rounded-md border border-zinc-300 px-2 text-sm text-zinc-800"
+              >
+                {carrierProviderOptions.map((provider) => (
+                  <option key={provider.value} value={provider.value}>
+                    {provider.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-zinc-600">
+              Capacity policy
+              <select
+                value={setup.capacityProfile}
+                onChange={(event) => setSetup((prev) => ({ ...prev, capacityProfile: event.target.value as CapacityProfile }))}
+                className="mt-1 h-9 w-full rounded-md border border-zinc-300 px-2 text-sm text-zinc-800"
+              >
+                <option value="conservative">Conservative</option>
+                <option value="balanced">Balanced</option>
+                <option value="aggressive">Aggressive</option>
+              </select>
+            </label>
+            <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
+              <p className="text-xs text-zinc-500">Data source</p>
+              <p className="mt-1 truncate text-sm font-medium text-zinc-900">{dataSource.label}</p>
+              <p className="mt-1 text-[11px] text-zinc-500">{formatRelativeTime(dataSource.updatedAtMs)}</p>
             </div>
           </div>
-        </aside>
+        </Panel>
 
-        <div className="min-w-0">
-          <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-4">
-            <section className="grid gap-4 md:grid-cols-3">
-              <KpiCard label="Sites loaded" value={`${sites.length}`} helper={upload ? upload.fileName : "Default set: 100"} />
-              <KpiCard label="Plan coverage" value={`${completion}%`} helper={`${projectSetting.startMonth} - ${projectSetting.endMonth}`} />
-              <KpiCard label="Capacity risk" value={risk} helper={`Max load ${maxLoad}%`} />
-            </section>
+        {!simulation ? (
+          <Panel title="Map">
+            <div className="grid min-h-[380px] place-items-center p-6 text-center">
+              <div>
+                <p className="text-sm font-medium text-zinc-900">前提条件を設定してシミュレーションを実行してください</p>
+                <p className="mt-1 text-xs text-zinc-500">データは Sample 100 を固定で使用します。</p>
+              </div>
+            </div>
+          </Panel>
+        ) : (
+          <>
+            <Panel title="Summary">
+              <div className="flex flex-wrap items-center gap-2 px-4 py-3 text-xs text-zinc-600">
+                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1">
+                  Assigned {simulation.generatedPlan.assignments.length} / {sampleSites.length}
+                </span>
+                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1">Peak {peakMonth.month}</span>
+                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1">Warnings {warningCount}</span>
+                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1">Risk {risk}</span>
+                <span className="ml-auto text-[11px] text-zinc-500">{simulation.generatedAt}</span>
+              </div>
+            </Panel>
 
             <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="min-h-[560px]">
-                <InteractiveJapanMap
-                  sites={sites}
-                  carrierOffices={initialCarrierOffices}
-                  carrierAssignments={assignments}
-                  warningBySiteId={warningBySiteId}
-                  highlightedSiteId={activeAssignment?.site.id ?? null}
-                  highlightedCarrierOfficeId={activeAssignment?.office.id ?? null}
-                />
-              </div>
-              <Panel
-                title="Site-Carrier mapping"
-                right={<span className="text-xs text-zinc-500">{filteredAssignmentRows.length} links</span>}
-              >
+              <Panel title="Map">
+                <div className="min-h-[560px] p-3">
+                  <InteractiveJapanMap
+                    sites={sampleSites}
+                    carrierOffices={simulation.carrierOffices}
+                    carrierAssignments={simulation.carrierAssignments}
+                    warningBySiteId={warningBySiteId}
+                    highlightedSiteId={activeAssignment?.site.id ?? null}
+                    highlightedCarrierOfficeId={activeAssignment?.office.id ?? null}
+                  />
+                </div>
+              </Panel>
+
+              <Panel title="Site-Carrier mapping" right={<span className="text-xs text-zinc-500">{filteredAssignmentRows.length} links</span>}>
                 <div className="border-b border-zinc-100 px-4 py-3">
                   <label className="text-xs font-medium text-zinc-600" htmlFor="office-filter">
                     Carrier office
@@ -365,7 +484,7 @@ export default function Home() {
                     className="mt-1 h-8 w-full rounded border border-zinc-300 px-2 text-xs text-zinc-700"
                   >
                     <option value="all">All offices</option>
-                    {initialCarrierOffices.map((office) => (
+                    {simulation.carrierOffices.map((office) => (
                       <option key={office.id} value={office.id}>
                         {office.name}
                       </option>
@@ -382,7 +501,7 @@ export default function Home() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
-                      {filteredAssignmentRows.slice(0, 120).map((row) => {
+                      {filteredAssignmentRows.slice(0, 160).map((row) => {
                         const active = activeAssignment?.key === row.key;
                         return (
                           <tr
@@ -408,81 +527,8 @@ export default function Home() {
                 </div>
               </Panel>
             </section>
-
-            <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-              <Panel title="Monthly deployment">
-                <div className="h-[260px] p-4">
-                  {mounted ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={monthlyData}>
-                        <CartesianGrid stroke="#e4e4e7" strokeDasharray="3 3" />
-                        <XAxis dataKey="month" stroke="#71717a" tickLine={false} />
-                        <YAxis stroke="#71717a" tickLine={false} allowDecimals={false} />
-                        <Tooltip />
-                        <Area type="monotone" dataKey="assigned" stroke="#18181b" fill="#e4e4e7" name="Assigned" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-full rounded bg-zinc-50" />
-                  )}
-                </div>
-              </Panel>
-              <Panel title="Carrier load">
-                <div className="divide-y divide-zinc-100">
-                  {carrierLoads.slice(0, 6).map((load) => (
-                    <div key={load.office.id} className="px-4 py-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-zinc-950">{load.office.prefecture}</span>
-                        <span className="text-sm text-zinc-600">{load.loadRatio}%</span>
-                      </div>
-                      <div className="mt-2 h-1.5 rounded bg-zinc-100">
-                        <div
-                          className={`h-1.5 rounded ${load.loadRatio > 95 ? "bg-red-600" : load.loadRatio > 75 ? "bg-amber-500" : "bg-zinc-800"}`}
-                          style={{ width: `${Math.min(100, load.loadRatio)}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Panel>
-            </section>
-
-            <Panel title="Sites" right={<span className="text-xs text-zinc-500">Showing 20 rows</span>}>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[860px] text-left text-sm">
-                  <thead className="bg-zinc-50 text-xs font-medium uppercase text-zinc-500">
-                    <tr>
-                      <th className="px-4 py-3">Site</th>
-                      <th className="px-4 py-3">Region</th>
-                      <th className="px-4 py-3">Difficulty</th>
-                      <th className="px-4 py-3">Priority</th>
-                      <th className="px-4 py-3">Month</th>
-                      <th className="px-4 py-3">Warnings</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100">
-                    {sites.slice(0, 20).map((site) => {
-                      const assignment = plan.assignments.find((item) => item.siteId === site.id);
-                      return (
-                        <tr key={site.id} className="hover:bg-zinc-50">
-                          <td className="px-4 py-3">
-                            <p className="font-medium text-zinc-950">{site.name}</p>
-                            <p className="mt-1 text-xs text-zinc-500">{site.prefecture}</p>
-                          </td>
-                          <td className="px-4 py-3 text-zinc-700">{site.region}</td>
-                          <td className="px-4 py-3 text-zinc-700">{site.difficulty}</td>
-                          <td className="px-4 py-3 text-zinc-700">{site.priority}</td>
-                          <td className="px-4 py-3 text-zinc-700">{assignment?.yearMonth ?? "-"}</td>
-                          <td className="px-4 py-3 text-zinc-700">{assignment?.warnings.length ?? 0}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Panel>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </main>
   );
