@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { InteractiveJapanMap } from "@/components/InteractiveJapanMap";
 import {
   type CarrierAssignment,
@@ -179,7 +180,16 @@ export default function Home() {
   const [monthIndex, setMonthIndex] = useState(0);
 
   useEffect(() => {
+    const root = document.documentElement;
+    const isNativeIos =
+      Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
+    root.classList.toggle("ios-native", isNativeIos);
+
     setDataSource((prev) => ({ ...prev, updatedAtMs: Date.now() }));
+
+    return () => {
+      root.classList.remove("ios-native");
+    };
   }, []);
 
   function showToast(message: string) {
@@ -460,9 +470,9 @@ export default function Home() {
   );
 
   return (
-    <main className="min-h-screen bg-zinc-100 pt-14 text-zinc-950">
+    <main className="min-h-screen bg-zinc-100 pb-[var(--safe-bottom)] pt-[calc(var(--safe-top)+3.5rem)] text-zinc-950">
       {toast && (
-        <div className="fixed right-4 top-[66px] z-[3200] rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 shadow-lg">
+        <div className="fixed right-4 top-[calc(var(--safe-top)+3.75rem)] z-[3200] rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 shadow-lg">
           {toast.message}
         </div>
       )}
@@ -517,7 +527,7 @@ export default function Home() {
         </div>
       )}
 
-      <header className="fixed inset-x-0 top-0 z-[3000] border-b border-zinc-200 bg-white/95 backdrop-blur">
+      <header className="fixed inset-x-0 top-0 z-[3000] border-b border-zinc-200 bg-white/95 pt-[var(--safe-top)] backdrop-blur">
         <div className="mx-auto flex h-14 max-w-[1500px] items-center justify-between px-3 sm:px-4">
           <div className="flex items-center gap-3">
             <button
